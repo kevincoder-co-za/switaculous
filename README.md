@@ -171,8 +171,7 @@ The tools it offers are: `project_info`, `read_swift_file`, `write_swift_file`,
 
 ## Security
 
-Please do not report security issues in public GitHub issues. Email them privately to
-kevin@kevincoder.co.za instead. See [SECURITY.md](SECURITY.md) for what to include and what
+Please do not report security issues in public GitHub issues, as this might put users of the software at risk, instead, email me privately. See [SECURITY.md](SECURITY.md) for what to include and what
 happens next.
 
 ## License and disclaimer
