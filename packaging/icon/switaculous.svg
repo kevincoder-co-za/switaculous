@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFB23F"/>
+      <stop offset="0.48" stop-color="#FF4F7B"/>
+      <stop offset="1" stop-color="#6E44FF"/>
+    </linearGradient>
+    <radialGradient id="shine" cx="0.25" cy="0.18" r="0.75">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.38"/>
+      <stop offset="0.55" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.46"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0.12"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0.35"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="26" stdDeviation="30" flood-color="#3b0a63" flood-opacity="0.35"/>
+    </filter>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="14" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="1024" height="1024" rx="232" fill="url(#background)"/>
+  <rect width="1024" height="1024" rx="232" fill="url(#shine)"/>
+  <g transform="rotate(-9 512 520)" filter="url(#shadow)">
+    <rect x="318" y="168" width="388" height="704" rx="92" fill="url(#glass)" stroke="url(#edge)" stroke-width="12"/>
+    <rect x="460" y="208" width="104" height="28" rx="14" fill="#fff" fill-opacity="0.6"/>
+    <rect x="452" y="818" width="120" height="12" rx="6" fill="#fff" fill-opacity="0.6"/>
+    <g fill="none" stroke="#fff" stroke-width="48" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M432 428 L360 520 L432 612"/>
+      <path d="M592 428 L664 520 L592 612"/>
+      <path d="M542 400 L482 640"/>
+    </g>
+  </g>
+  <g filter="url(#glow)" fill="#fff">
+    <path transform="translate(770 236) scale(1.25)" d="M0,-100 C8,-30 30,-8 100,0 C30,8 8,30 0,100 C-8,30 -30,8 -100,0 C-30,-8 -8,-30 0,-100 Z"/>
+    <path transform="translate(236 812) scale(0.5)" fill-opacity="0.9" d="M0,-100 C8,-30 30,-8 100,0 C30,8 8,30 0,100 C-8,30 -30,8 -100,0 C-30,-8 -8,-30 0,-100 Z"/>
+  </g>
+</svg>

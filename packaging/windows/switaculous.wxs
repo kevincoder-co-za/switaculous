@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- WiX 5 project. Build it with build-msi.ps1, or let install.ps1 do everything. -->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+  <Package Name="Switaculous" Manufacturer="Switaculous contributors" Version="$(var.Version)" UpgradeCode="7d7c2b2e-4f8e-4d1a-9b2f-5a1c0e6b3c11" Language="1033" Scope="perUser">
+    <MajorUpgrade AllowSameVersionUpgrades="yes" DowngradeErrorMessage="A newer version of Switaculous is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+    <Icon Id="AppIcon.ico" SourceFile="switaculous.ico" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon.ico" />
+    <Property Id="ARPCOMMENTS" Value="Swift &amp; SwiftUI Learning Editor" />
+
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="ProgramsFolder" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="Switaculous" />
+      </Directory>
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder" />
+
+    <!-- A per-user install keeps its key paths in HKCU, as Windows Installer requires. -->
+    <ComponentGroup Id="ProgramFiles" Directory="INSTALLFOLDER">
+      <Component Id="ProgramFiles" Guid="2f6b1a6e-3b2d-4a4f-8f41-1a6c0f7e9a21">
+        <File Id="SwitaculousExe" Source="$(var.BinaryPath)" Name="switaculous.exe" />
+        <File Id="PinScript" Source="pin-to-taskbar.ps1" />
+        <File Id="Readme" Source="..\..\README.md" />
+        <File Id="License" Source="..\..\LICENSE" Name="LICENSE.txt" />
+        <File Id="Notices" Source="..\..\THIRD_PARTY_NOTICES.md" />
+        <!-- Puts switaculous.exe on the PATH so `switaculous -mcp` works from a terminal. -->
+        <Environment Id="PathEntry" Name="PATH" Value="[INSTALLFOLDER]" Permanent="no" Part="last" Action="set" System="no" />
+        <RemoveFolder Id="RemoveInstallFolder" On="uninstall" />
+        <RemoveFolder Id="RemoveProgramsFolder" Directory="ProgramsFolder" On="uninstall" />
+        <RegistryValue Root="HKCU" Key="Software\Switaculous" Name="InstallFolder" Type="string" Value="[INSTALLFOLDER]" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <ComponentGroup Id="Shortcuts" Directory="ProgramMenuFolder">
+      <Component Id="StartMenuShortcut" Guid="c3e1f0a9-5d2b-4e8c-9a7f-6b4d2e1c8f55">
+        <Shortcut Id="StartMenuEntry" Name="Switaculous" Description="Swift &amp; SwiftUI Learning Editor" Target="[INSTALLFOLDER]switaculous.exe" WorkingDirectory="INSTALLFOLDER" Icon="AppIcon.ico" />
+        <RegistryValue Root="HKCU" Key="Software\Switaculous" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <Feature Id="Main" Title="Switaculous" Level="1">
+      <ComponentGroupRef Id="ProgramFiles" />
+      <ComponentGroupRef Id="Shortcuts" />
+    </Feature>
+
+    <!-- The finish page offers to pin Switaculous to the taskbar (ticked by default), then starts it. -->
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Pin Switaculous to the taskbar" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+    <CustomAction Id="PinToTaskbar" Directory="INSTALLFOLDER" Execute="immediate" Return="ignore"
+        ExeCommand="&quot;[System64Folder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File &quot;[INSTALLFOLDER]pin-to-taskbar.ps1&quot;" />
+    <CustomAction Id="StartSwitaculous" Directory="INSTALLFOLDER" Execute="immediate" Return="asyncNoWait"
+        ExeCommand="&quot;[INSTALLFOLDER]switaculous.exe&quot;" />
+    <UI>
+      <ui:WixUI Id="WixUI_Minimal" />
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="PinToTaskbar" Order="1" Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed" />
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="StartSwitaculous" Order="2" Condition="NOT Installed" />
+    </UI>
+    <WixVariable Id="WixUILicenseRtf" Value="license.rtf" />
+  </Package>
+</Wix>

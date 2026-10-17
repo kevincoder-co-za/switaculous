@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Switaculous - Swift &amp; SwiftUI Learning Editor</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="cm/codemirror.css">
+<link rel="stylesheet" href="cm/show-hint.css">
+<link rel="stylesheet" href="cm/dialog.css">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="editor.css">
+</head>
+<body>
+<div id="bar">
+  <div class="bar-left">
+    <div class="menu-anchor">
+      <button id="menubtn" class="icon-button-bar" title="Menu" aria-haspopup="menu"><svg viewBox="0 0 16 16" width="16" height="16"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
+      <div id="mainmenu" class="app-menu" role="menu">
+        <button class="menu-item" data-command="open-folder">Open Folder…</button>
+        <button class="menu-item" data-command="new-project">New Project…</button>
+        <div class="menu-separator"></div>
+        <div class="menu-item has-submenu">Demos<div id="demosmenu" class="app-menu submenu"></div></div>
+        <div class="menu-item has-submenu">Recent Projects<div id="recentmenu" class="app-menu submenu"></div></div>
+        <div class="menu-separator"></div>
+        <button class="menu-item" data-command="connect-mcp">Connect MCP…</button>
+        <button class="menu-item" data-command="connect-phone">Connect iPhone / iPad…</button>
+        <div class="menu-separator"></div>
+        <button class="menu-item" data-command="quit">Quit Switaculous</button>
+      </div>
+    </div>
+    <div class="brand" title="Swift &amp; SwiftUI Learning Editor"><span class="dot"></span>Switaculous</div>
+    <button id="vscodebtn" title="Open this project in Visual Studio Code">Open in VS Code</button>
+  </div>
+  <div class="bar-center dock-buttons" title="Where the preview goes">
+    <button class="dock-button" data-dock="left" title="Preview on the left"><svg viewBox="0 0 16 16" width="16" height="16"><rect x="1.5" y="2.5" width="13" height="11" rx="2" fill="none" stroke="currentColor"/><rect x="2" y="3" width="4.5" height="10" rx="1.5" fill="currentColor"/></svg></button>
+    <button class="dock-button" data-dock="top" title="Preview at the top"><svg viewBox="0 0 16 16" width="16" height="16"><rect x="1.5" y="2.5" width="13" height="11" rx="2" fill="none" stroke="currentColor"/><rect x="2" y="3" width="12" height="4" rx="1.5" fill="currentColor"/></svg></button>
+    <button class="dock-button" data-dock="bottom" title="Preview at the bottom"><svg viewBox="0 0 16 16" width="16" height="16"><rect x="1.5" y="2.5" width="13" height="11" rx="2" fill="none" stroke="currentColor"/><rect x="2" y="9" width="12" height="4" rx="1.5" fill="currentColor"/></svg></button>
+    <button class="dock-button" data-dock="right" title="Preview on the right"><svg viewBox="0 0 16 16" width="16" height="16"><rect x="1.5" y="2.5" width="13" height="11" rx="2" fill="none" stroke="currentColor"/><rect x="9.5" y="3" width="4.5" height="10" rx="1.5" fill="currentColor"/></svg></button>
+    <button class="dock-button" data-dock="popout" title="Pop the preview out into its own window (close it to bring it back)"><svg viewBox="0 0 16 16" width="16" height="16"><path d="M9 2.5h4.5V7M13.5 2.5 7.5 8.5M11.5 9.5v2.5a1.5 1.5 0 0 1-1.5 1.5H4a1.5 1.5 0 0 1-1.5-1.5V6A1.5 1.5 0 0 1 4 4.5h2.5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </div>
+  <div class="bar-right">
+    <select id="devsel" title="Device">
+      <option value="iphone16">iPhone 16</option>
+      <option value="iphone16pro">iPhone 16 Pro</option>
+      <option value="iphone16promax">iPhone 16 Pro Max</option>
+      <option value="iphonese">iPhone SE</option>
+      <option value="ipadmini">iPad mini</option>
+      <option value="ipad11">iPad 11"</option>
+      <option value="ipadpro13">iPad Pro 13"</option>
+    </select>
+    <button id="rotatebtn" title="Turn the iPad sideways" style="display:none">Rotate</button>
+    <button id="darkbtn" title="Toggle dark mode in the preview">Dark</button>
+    <button id="resetbtn" title="Reset all @State to initial values">Reset state</button>
+    <button id="erasebtn" title="Delete everything this app saved with SwiftData" style="display:none">Erase data</button>
+  </div>
+</div>
+<div id="main" class="dock-right">
+  <div id="workspace">
+  <div id="explorer">
+    <div class="sidebar-tabs">
+      <button class="sidebar-tab active" data-panel="filespanel">Files</button>
+      <button class="sidebar-tab" data-panel="assetspanel">Assets</button>
+      <button class="sidebar-tab" data-panel="symbolspanel">Icons</button>
+    </div>
+    <div id="filespanel" class="sidebar-panel">
+      <div class="pane-header"><span id="projectname" class="project-name">Files</span> <button id="newfile" class="icon-button" title="New SwiftUI file">+</button></div>
+      <div id="filetree"></div>
+    </div>
+    <div id="assetspanel" class="sidebar-panel hidden">
+      <div class="pane-header">Assets
+        <span class="header-buttons">
+          <button id="addimage" class="text-button" title="Add image files to Assets.xcassets">+ Image</button>
+          <button id="addcolor" class="text-button" title="Add a colour set to Assets.xcassets">+ Colour</button>
+        </span>
+      </div>
+      <div id="assetlist"></div>
+    </div>
+    <div id="symbolspanel" class="sidebar-panel hidden">
+      <div class="pane-header">System icons</div>
+      <input id="symbolsearch" class="sidebar-search" placeholder="Search icons (e.g. heart, arrow)" spellcheck="false">
+      <div id="symbolgrid"></div>
+    </div>
+  </div>
+  <div class="splitter" id="split-explorer"></div>
+  <div id="editorpane">
+    <div class="pane-header editor-header">
+      <span id="filename"></span>
+      <span id="savestatus"></span>
+      <span class="grow"></span>
+      <button id="consolebtn" class="text-button">Console</button>
+    </div>
+    <div id="editor"></div>
+    <div id="consolepane">
+      <div class="pane-header">Console <button id="clearbtn" class="text-button">Clear</button></div>
+      <div id="console"></div>
+    </div>
+  </div>
+  </div>
+  <div class="splitter" id="split-preview"></div>
+  <div id="stage">
+    <div id="status"></div>
+    <div id="previewtabs"></div>
+    <div id="disconnected">Disconnected. Is Switaculous still running?</div>
+    <div id="device-wrap"></div>
+    <div id="errorbox" title="Click to jump to the error"></div>
+  </div>
+</div>
+<div id="dialog" class="modal">
+  <div class="modal-card">
+    <div id="dialogtitle" class="modal-title"></div>
+    <input id="dialoginput" spellcheck="false">
+    <div class="modal-buttons"><button id="dialogcancel">Cancel</button><button id="dialogok" class="primary">OK</button></div>
+  </div>
+</div>
+<div id="projectdialog" class="modal">
+  <div class="modal-card wide">
+    <div class="modal-title">Open a project folder</div>
+    <div class="modal-hint">This computer has no folder picker Switaculous can use, so type or paste a folder path. A new folder gets a starter app.</div>
+    <input id="projectinput" spellcheck="false" placeholder="C:\Users\you\Documents\MyApp">
+    <div class="modal-buttons"><button id="projectcancel">Cancel</button><button id="projectopen" class="primary">Open</button></div>
+  </div>
+</div>
+<div id="sharedialog" class="modal">
+  <div class="modal-card wide connect-card">
+    <div id="connecttitle" class="modal-title"></div>
+    <div class="connect-columns">
+      <section class="connect-section" data-connect="phone">
+        <div class="modal-hint">On the same Wi-Fi, scan this with the Camera app. The app opens in the browser there, scaled to the screen, and follows every change you make. If nothing loads, allow switaculous through the Windows firewall when it asks.</div>
+        <img id="shareqr" class="share-qr" alt="QR code">
+        <div id="shareurl" class="share-url"></div>
+      </section>
+      <section class="connect-section" data-connect="mcp">
+        <div class="modal-hint">While Switaculous is open it serves MCP at <code id="mcpurl"></code>. Register it once in a terminal, then Claude can read and write this project, see errors and the rendered screen, and tap through the app.</div>
+        <pre id="mcpcommand" class="connect-code"></pre>
+        <button id="copymcpcommand" class="text-button">Copy command</button>
+        <div class="modal-hint">Or add this to a project's <code>.mcp.json</code>:</div>
+        <pre id="mcpjson" class="connect-code"></pre>
+        <button id="copymcpjson" class="text-button">Copy JSON</button>
+        <div class="modal-hint">Keep the port the same between sessions by starting Switaculous with <code>-port 8642</code> (the default) and nothing else using it. Without the window open, Claude can start its own preview instead: <code id="mcpstdio"></code></div>
+      </section>
+    </div>
+    <div class="modal-buttons"><button id="sharecancel">Close</button></div>
+  </div>
+</div>
+<div id="colordialog" class="modal">
+  <div class="modal-card">
+    <div class="modal-title">New colour set</div>
+    <input id="colorname" spellcheck="false" placeholder="Name, e.g. Brand">
+    <label class="color-row">Light <input id="colorlight" type="color" value="#0a84ff"></label>
+    <label class="color-row"><input id="colorhasdark" type="checkbox"> Different in dark mode <input id="colordark" type="color" value="#64d2ff" disabled></label>
+    <div class="modal-buttons"><button id="colorcancel">Cancel</button><button id="colorok" class="primary">Add</button></div>
+  </div>
+</div>
+<div id="quitmessage" class="modal"><div class="modal-card"><div class="modal-title">Switaculous has stopped</div><div class="modal-hint">Your work is saved. You can close this tab, and start Switaculous again from the Start menu or your applications.</div></div></div>
+<div id="doctip"></div>
+<div id="toast"></div>
+<script src="cm/codemirror.js"></script>
+<script src="cm/swift.js"></script>
+<script src="cm/matchbrackets.js"></script>
+<script src="cm/closebrackets.js"></script>
+<script src="cm/active-line.js"></script>
+<script src="cm/show-hint.js"></script>
+<script src="cm/searchcursor.js"></script>
+<script src="cm/dialog.js"></script>
+<script src="cm/search.js"></script>
+<script src="cm/comment.js"></script>
+<script src="symbols.js"></script>
+<script src="media.js"></script>
+<script src="app.js"></script>
+<script src="editor.js"></script>
+<script src="library.js"></script>
+</body>
+</html>

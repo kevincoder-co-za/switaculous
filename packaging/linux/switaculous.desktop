@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Switaculous
+GenericName=Swift & SwiftUI Learning Editor
+Comment=Write Swift and SwiftUI code and see it run in a live iPhone preview
+Exec=switaculous %f
+Icon=switaculous
+Terminal=false
+Categories=Development;IDE;
+Keywords=Swift;SwiftUI;iOS;

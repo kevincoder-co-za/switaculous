@@ -1,278 +1,187 @@
-# SwiftUI Tutor — live SwiftUI previews on Windows and Linux
+# Switaculous - Swift & SwiftUI Learning Editor
 
-SwiftUI Tutor is a small playground for SwiftUI that runs in your browser: a file list on the
-left, a Swift code editor in the middle and a live iPhone preview on the right. Type in the
-editor and the preview updates as you go (hot reload), keeping your `@State` values where it
-can. You can also open the same folder in VS Code; changes you save there show up in the
-editor and the preview straight away. It's a single program with no dependencies, so there's
-nothing else to install.
+Switaculous lets you write Swift and SwiftUI code on Windows, Linux or a Mac and see it run in
+a live iPhone or iPad preview in your browser. It is made for people who want to learn SwiftUI
+before buying a Mac.
 
-> **What this is, and what it isn't.** SwiftUI Tutor is a learning tool for people on Windows
-> or Linux who want to learn SwiftUI before investing in a Mac. It is **not** a replacement for
-> Xcode or the real SwiftUI framework, it can't build apps for a phone, and the preview is an
-> approximation of how things look on a device. When you're ready to ship, use Xcode.
+- Code editor on one side, live preview on the other. The preview updates as you type.
+- The code you write is normal SwiftUI, so it opens and builds in Xcode without changes.
+- The preview uses the iOS 26 Liquid Glass look, on iPhone and iPad screen sizes.
+- Code completion, a file list, an image and colour library, and a system icon browser.
+- Scan a QR code to try the app on your own iPhone or iPad over Wi-Fi.
+- AI assistants such as Claude Code can work on your project through the built-in MCP server.
+- One program with nothing else to install.
 
-## Quick start (Windows)
+![Switaculous with a SwiftUI file in the editor and the app running in the iPhone preview](Screenshot.png)
 
-1. Unzip the download anywhere, for example `C:\SwiftUITutor`.
-2. Double-click `swiftui-tutor.exe`.
-   - It creates a `MyApp` folder next to the program with a starter app, and opens SwiftUI Tutor in your browser.
-   - If Windows SmartScreen warns about an unknown app, click **More info → Run anyway**. The program isn't code-signed.
-3. Click `ContentView.swift` in the file list, change some code, and watch the phone update.
+Switaculous is a learning tool, not a replacement for Xcode. It cannot build apps for a phone
+and the preview is a close approximation, not a pixel-perfect copy. When you are ready to ship
+an app, use Xcode.
 
-To open a different folder, click the folder name in the top-left corner and type or paste its
-path (a new, empty folder gets a starter app). You can also start the program with a folder:
+## Install or run
 
-```
-swiftui-tutor.exe C:\path\to\your\project
-```
+Switaculous is always built on your own computer from this source code; no ready-made programs
+or installers are downloaded. First get the code, either with Code > Download ZIP on GitHub
+(then unzip it) or with `git clone`.
 
-You can also drag a folder onto `swiftui-tutor.exe`.
+The install scripts do the rest. They download Go with curl if you don't have it, build
+Switaculous, install it like any other app and start it. To install Go yourself instead, follow
+[the Go installation guide](https://go.dev/doc/install) (Go 1.24 or newer).
 
-Try the included examples:
+### Windows
 
-```
-swiftui-tutor.exe examples\FruitsDemo
-swiftui-tutor.exe examples\Todos
-swiftui-tutor.exe examples\Gallery
-swiftui-tutor.exe examples\Recipes
-swiftui-tutor.exe examples\PhotoJournal
-```
-
-## The editor
-
-| Part | What it does |
-|---|---|
-| File list (left) | Every `.swift` file in the project, including subfolders. Click a file to open it. Hover over a file for **rename** (✎) and **delete** (🗑). **+** creates a new SwiftUI view file; type `Views/ProfileView` to put it in a subfolder. A red badge marks files with errors. |
-| Code editor (middle) | Swift syntax highlighting, line numbers, bracket matching and auto-closing, and code completion (see below). Your work saves automatically about half a second after you stop typing; **Ctrl+S** saves straight away. **Ctrl+/** comments lines out, **Ctrl+F** searches. A line with an error turns red, with the message shown underneath it. |
-| Assets tab (left) | The images and colour sets in your project. **+ Image** and **+ Colour** add new ones to `Assets.xcassets` in the format Xcode uses. Click an asset to insert `Image("name")` or `Color("name")` at the cursor. |
-| Icons tab (left) | A searchable catalogue of the system icons the preview can draw. Click one to insert `Image(systemName: "name")`, or just the name when the cursor is inside a string. |
-| Open in VS Code | Opens the project folder in VS Code at the file and line you're on. VS Code needs to be installed with its `code` command on the PATH (the installer's default). |
-| Show folder | Opens the project folder in File Explorer. |
-| Panel borders | Drag the borders between the panels to resize them. |
-
-**Code completion.** Suggestions appear as you type and with **Ctrl+Space**. They know the
-code: after `book.` you get the properties and methods of your `Book` type, after `Text("Hi").`
-the view modifiers with their signatures, inside `.font(.` the fonts, inside `Image(systemName: "`
-the icon names, and inside `Image("` your asset names. Choosing a method or view inserts it with
-its argument labels and puts the cursor on the first one. Hover over a view or modifier name for a
-short description of what it does; **Ctrl+Shift+Space** shows it for the word under the cursor.
-
-Edits you make in VS Code (or any other editor) are picked up automatically. If you have unsaved
-changes to the same file in the browser, your browser copy wins until you save it.
-
-**Tip:** install the *Swift* extension (by the Swift Server Work Group) in VS Code for syntax highlighting there.
-
-## Using the preview
-
-| Control | What it does |
-|---|---|
-| Preview picker | **Auto** shows the `#Preview` in the file you're editing. You can also pin a specific `#Preview`, `PreviewProvider`, or your `@main App`. |
-| Device | Four iPhone sizes and three iPads. iPads get a **Rotate** button; in landscape `NavigationSplitView` shows the sidebar and detail side by side, in portrait the sidebar slides in from a toolbar button, and `TabView` puts its tabs at the top like iPadOS. |
-| Pop out preview | Opens the phone in its own window, so the editor and the preview can be on different screens. Both windows show the same app state. Click again to bring it back. |
-| Share | Shows a QR code. Scan it with an iPhone or iPad on the same Wi-Fi and the app opens in that device's browser, scaled to the screen, following every change you make. The phone can only see and tap; it can't read or change your files. Windows may ask to allow `swiftui-tutor` through the firewall the first time. Start the program with `-local-only` to turn sharing off. |
-| iOS 26 / iOS 18 style | Glass look (floating tab bar, glass buttons) or the classic look |
-| Dark | Toggles dark mode. `@Environment(\.colorScheme)` follows it. |
-| Reset state | Throws away all `@State` and starts the app fresh. Saved SwiftData stays. |
-| Erase data | Only shown when the project has `@Model` classes. Deletes everything the app saved with SwiftData, like deleting the app from a phone. |
-| Console | `print()` output, warnings and errors |
-
-The preview is interactive. You can tap buttons, type in text fields, flip toggles, push
-navigation links, open sheets, alerts and menus, swipe list rows to delete, and switch tabs.
-
-When you make a mistake, a red box under the phone shows the error and the line it's on;
-click it to jump to that line. Build errors leave the last working preview on screen, greyed
-out.
-
-## What's supported
-
-**Swift language:** structs, classes and inheritance, enums (raw values, associated values,
-`CaseIterable`), protocols with extensions, extensions on your own and built-in types,
-generics, closures and trailing closures, `if`/`guard let`, `switch` with patterns and
-`where`, `for`/`while`/`repeat`, labeled loops, optionals (`?.`, `??`, `!`, `if let x`),
-`throws`/`try`/`do-catch`, `inout`, operator overloading, `didSet`/`willSet`, computed and
-static properties, `mutating`, tuples, ranges, `stride`, and string interpolation with
-`specifier:` and `format:`.
-
-**Standard library:** String, Character, Int, Double, Bool, Array, Dictionary, Set, Optional,
-plus the common methods (`map`, `filter`, `reduce`, `sorted`, `firstIndex`, `split`,
-`replacingOccurrences`, `formatted()`, and so on). Also `UUID`, `Date`, `Calendar`,
-`DateFormatter`, `Timer`, `DispatchQueue`, `Task { }` and `Task.sleep`, `async`/`await`,
-`String(format:)`, `lazy var`, generics with inferred return types, and `if`/`switch`
-expressions.
-
-**Codable and saving:** `JSONEncoder`/`JSONDecoder` with the synthesized `Codable`
-conformance, `CodingKeys`, `keyEncodingStrategy`, `dateDecodingStrategy` (`.iso8601`,
-`.secondsSince1970`, `.formatted(formatter)`) and `outputFormatting`. `UserDefaults.standard`
-and `@AppStorage` share one store that is saved in the project's `.swiftdata` folder, so
-values survive a restart. `Bundle.main.url(forResource:withExtension:)` and
-`Data(contentsOf:)` read files from your project folder, so the usual
-`Bundle.main.decode("astronauts.json")` extension works; just put the JSON file in the
-project folder. Custom `init(from:)` / `encode(to:)` are not supported.
-
-**Views:** Text (including Markdown and concatenation), Image (system symbols and your own
-images), Label, VStack/HStack/ZStack, Lazy stacks, LazyVGrid/LazyHGrid, Grid, Spacer,
-Divider, ScrollView, ScrollViewReader, List, Form, Section, ForEach (including `$bindings`),
-Group, NavigationStack, NavigationView, NavigationSplitView, NavigationLink (destination- and
-value-based), `navigationDestination`, TabView (normal and `.page`), `Tab`, Button (all
-built-in styles plus your own `ButtonStyle`), Toggle, TextField, SecureField, TextEditor,
-Slider, Stepper, Picker (menu, segmented, inline, wheel), DatePicker, ColorPicker,
-ProgressView, Gauge, Link, Menu, ShareLink, GroupBox, DisclosureGroup, LabeledContent,
-ContentUnavailableView, GeometryReader, AsyncImage, ViewThatFits, TimelineView, the shapes
-(Rectangle, RoundedRectangle, Circle, Capsule, Ellipse, UnevenRoundedRectangle) with
-`fill`/`stroke`/`trim`, gradients, materials, and Color.
-
-**State and data flow:** `@State`, `@Binding`, `@StateObject`, `@ObservedObject`,
-`@EnvironmentObject`, `@Published`, `@Observable` with `@Bindable`, `@Environment` (dismiss,
-colorScheme and others), `@FocusState`, `@AppStorage`, `@Previewable`, `.constant()` bindings,
-and `Binding(get:set:)`.
-
-**Modifiers:** about 250 are recognised. Most are drawn; accessibility, keyboard and similar
-ones are accepted and have no visual effect. They include layout (padding, frame, offset,
-position, aspectRatio, fixedSize, ignoresSafeArea, safeAreaInset), styling, `.sheet`,
-`.fullScreenCover`, `.alert`, `.confirmationDialog`, `.toolbar`, `.searchable`,
-`.swipeActions`, `.contextMenu`, `.onAppear`, `.task`, `.onChange`, `.onReceive`,
-`.onTapGesture`, `withAnimation` and `.transition`, custom `ViewModifier`s and `View`
-extensions.
-
-## SwiftData
-
-`@Model`, `@Query`, `ModelContainer`, `ModelContext` and `#Predicate` work like on a phone, and
-the data is saved in a real SQLite database. Xcode's SwiftData project template runs unchanged.
-
-- **Where the data lives:** in `.swiftdata/default.store` inside your project folder (or
-  `<name>.store` for `ModelConfiguration("name")`). It's a normal SQLite file with one table per
-  `@Model` class and one column per property, so you can open it with a tool like
-  *DB Browser for SQLite*. Structs, enums and arrays are stored as JSON text; `Data` (photos) as
-  BLOBs.
-- **Saving:** changes are saved automatically after every tap, like SwiftData's autosave. `try
-  modelContext.save()` also works, and `isAutosaveEnabled: false` turns autosave off.
-- **Previews:** `.modelContainer(for: Item.self, inMemory: true)` and
-  `ModelConfiguration(isStoredInMemoryOnly: true)` keep the data in memory, so each hot reload
-  starts the preview with fresh sample data, as in Xcode. Pick your `App` in the preview picker
-  to use the saved data.
-- **Hot reload:** adding a property to a `@Model` adds a column to the table (the property's
-  default value fills existing rows). `@Attribute(originalName:)` renames a column.
-- **Supported:** `@Model`, `@Query(filter:sort:order:)`, `@Query(sort: [SortDescriptor])`,
-  `Query(...)` built in `init` (`_items = Query(...)`), `@Environment(\.modelContext)`,
-  `.modelContainer(for:inMemory:isAutosaveEnabled:)`, `.modelContainer(container)`,
-  `ModelContainer(for:configurations:)`, `Schema`, `ModelConfiguration`, `container.mainContext`,
-  `insert`, `delete`, `delete(model:where:)`, `save`, `fetch`, `fetchCount`, `FetchDescriptor`
-  (`predicate`, `sortBy`, `fetchLimit`, `fetchOffset`), `SortDescriptor`, `#Predicate`,
-  `@Attribute(.unique)`, `@Attribute(.externalStorage)`, `@Transient`,
-  `@Relationship(deleteRule: .cascade, inverse:)` with both ends kept in sync, `@Bindable` model
-  editing, `hasChanges` and `persistentModelID`.
-- **Not supported:** CloudKit sync, undo, `rollback()`, versioned migration plans
-  (`VersionedSchema`) and history tracking.
-
-## Photos and camera
-
-The photo and camera APIs work with your computer instead of a phone's photo library and camera:
-
-- **`PhotosPicker`** (and `.photosPicker(isPresented:selection:)`) opens your browser's file
-  picker. Single and multiple selection, `matching:` filters and `maxSelectionCount:` work.
-  `loadTransferable(type: Data.self)` and `loadTransferable(type: Image.self)` return the picked
-  photo.
-- **Camera:** the usual `UIViewControllerRepresentable` wrapper around `UIImagePickerController`
-  with `sourceType = .camera` shows an iPhone-style camera screen using your webcam (the browser
-  asks for permission the first time). The shutter, Retake and Use Photo buttons work, and the
-  photo arrives in your delegate's `imagePickerController(_:didFinishPickingMediaWithInfo:)`.
-  Without a webcam you can choose a photo file instead. `sourceType = .photoLibrary` and the
-  older `PHPickerViewController` wrapper use the file picker.
-- **Images:** `UIImage(data:)`, `Image(uiImage:)`, `jpegData(compressionQuality:)`,
-  `pngData()` and `size` work, so photos can be stored in SwiftData as `Data`. Large photos are
-  scaled to at most 2048 pixels on the long side when picked.
-
-The `PhotoJournal` example puts all of this together.
-
-## Using it with Claude Code (MCP)
-
-SwiftUI Tutor can act as an MCP server, so Claude Code (or any assistant that speaks MCP) can
-work on the open project: read and write the Swift files, see build and runtime errors with
-line numbers, look at an outline of the rendered screen, tap buttons and type into fields to
-check its work, switch previews and devices, and look up which views and modifiers the
-preview supports. Everything it does shows up live in your editor and preview.
-
-Register it once (use your own path):
+In the Switaculous folder, run:
 
 ```
-claude mcp add swiftui-tutor -- "C:\Users\you\Documents\OtherProjects\SwiftUITutor\swiftui-tutor.exe" -mcp
+powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
-Or add it to a project's `.mcp.json`:
+The script builds a standard Windows installer (MSI) and opens it. The installer adds
+Switaculous to the Start menu, and its last page has a "Pin Switaculous to the taskbar" box that
+is ticked by default. Windows 11 doesn't let installers pin apps, so there it tells you how to
+pin it yourself (type Switaculous in Start, right-click it, choose Pin to taskbar).
+
+The first time, the script also downloads the WiX toolset and the .NET SDK it runs on (about
+250 MB, kept in `%LOCALAPPDATA%\Switaculous\build-tools`) to build the installer.
+
+With Go installed you can also run it straight from the source, without installing:
+`go run .`
+
+### macOS
+
+In the Switaculous folder, run:
+
+```
+bash install.sh
+```
+
+The script builds `Switaculous.app`, copies it to your Applications folder and offers to add it
+to the Dock. With Go installed you can also run it straight from the source, without
+installing: `go run .`
+
+### Linux
+
+In the Switaculous folder, run:
+
+```
+bash install.sh
+```
+
+The script builds a `.deb` package (Debian, Ubuntu, Mint) or an `.rpm` package (Fedora, Red Hat,
+openSUSE), installs it with your package manager so Switaculous appears in your applications
+menu, and offers to add it to your dock. The package it built stays in the `dist` folder.
+
+With Go installed you can also run it straight from the source, without installing:
+`go run .`
+
+### Using Switaculous
+
+Switaculous opens in your browser. The first time it creates a starter app in
+`Documents/Switaculous/MyApp`; after that it opens the project you used last. Use the menu
+button (three lines, top left) to:
+
+- **Open Folder**: open any folder with Swift code, such as the folder next to an `.xcodeproj`.
+- **New Project**: pick a name and a place to save it, and get a starter app.
+- **Demos**: open one of the included example apps. They are copied to
+  `Documents/Switaculous/Demos` the first time, so you can change them freely.
+- **Recent Projects**: reopen one of the last ten projects.
+- **Connect MCP** and **Connect iPhone / iPad**: see below.
+- **Quit Switaculous**: stop the program. Your work is always saved.
+
+The buttons in the middle of the top bar move the preview to the left, top, bottom or right of
+the editor, or pop it out into its own window for a second screen. Close that window and the
+preview goes back to where it was.
+
+You can also start it with a project folder, for example `switaculous C:\Projects\MyApp`.
+Use `switaculous -help` to see all options.
+
+## What is supported
+
+**Swift:** structs, classes, enums, protocols, extensions, generics, closures, optionals,
+`if` and `switch` expressions, `async`/`await` and `Task`, and the standard library types
+(String, Int, Double, Bool, Array, Dictionary, Set, Date, UUID and more) with their common
+methods.
+
+**SwiftUI views:** text, images, labels, stacks, grids, lists, forms, scroll views,
+navigation (stack, split view, links, destinations), tab views, buttons, toggles, text fields,
+pickers, sliders, steppers, date and colour pickers, menus, sheets, alerts, confirmation
+dialogs, toolbars, search, swipe actions, context menus, shapes, gradients and materials.
+About 250 modifiers are recognised, plus your own views, view modifiers and button styles.
+
+**State:** `@State`, `@Binding`, `@Observable` with `@Bindable`, `@StateObject`,
+`@ObservedObject`, `@EnvironmentObject`, `@Environment`, `@FocusState` and `@AppStorage`.
+
+**SwiftData:** `@Model`, `@Query`, `ModelContainer`, `ModelContext`, `#Predicate`,
+relationships and fetch descriptors. Data is saved in a real SQLite file in the project's
+`.swiftdata` folder, and Xcode's SwiftData template runs unchanged.
+
+**Saving and files:** `Codable` with `JSONEncoder` and `JSONDecoder`, `UserDefaults`,
+`@AppStorage`, and reading JSON files from your project with `Bundle.main`.
+
+**Photos and camera:** `PhotosPicker` uses your computer's file picker, and the usual
+`UIImagePickerController` camera code uses your webcam.
+
+**Assets:** images and colour sets in `Assets.xcassets`, including dark mode colours and
+`AccentColor`. Add new ones from the Assets tab. The Icons tab lists the system icons the
+preview can draw (about 400 common names and their variants).
+
+**Not supported:** networking (`URLSession`), Core Data, maps, charts, video, `Canvas` and
+custom `Path` drawing, and UIKit views other than the photo and camera pickers. Switaculous
+does not do Swift's full type checking, so a few mistakes that Xcode reports will still run
+here. Xcode is always the final judge.
+
+**On your iPhone or iPad:** choose Connect iPhone / iPad in the menu and scan the QR code with
+the Camera app. The device must be on the same Wi-Fi. It can view and tap the app but cannot
+read or change your files. Start Switaculous with `-local-only` to turn this off.
+
+## Using with AI assistants
+
+Switaculous includes an MCP server, so an AI assistant such as Claude Code can work on the
+project you have open. It can read and write the Swift files, see errors, look at an outline
+of the screen in the preview, tap buttons and type into fields to test its changes, and switch
+devices. Everything it does shows up live in your editor and preview.
+
+While Switaculous is open, the MCP server runs on the same port as the editor, at
+`http://127.0.0.1:8642/mcp`. Choose Connect MCP in the menu to copy the exact command for your
+port. To register it with Claude Code, run this once in a terminal:
+
+```
+claude mcp add --transport http switaculous http://127.0.0.1:8642/mcp
+```
+
+Or add it to a project's `.mcp.json` file:
 
 ```json
 {
   "mcpServers": {
-    "swiftui-tutor": {
-      "command": "C:\\Users\\you\\Documents\\OtherProjects\\SwiftUITutor\\swiftui-tutor.exe",
-      "args": ["-mcp"]
+    "switaculous": {
+      "type": "http",
+      "url": "http://127.0.0.1:8642/mcp"
     }
   }
 }
 ```
 
-When SwiftUI Tutor is already open, the MCP server talks to that window. When it isn't, it
-starts the preview itself for the folder you pass after `-mcp` (or `MyApp`), so Claude can
-still see the app. A typical session: *"Add a settings screen with a dark-mode toggle and
-check it works"* — Claude writes the file, reads the errors, taps the toggle, and fixes what
-it finds.
+Then ask Claude something like "Add a settings screen with a dark mode toggle and check that
+it works". The MCP server only accepts connections from your own computer.
 
-Tools: `project_info`, `read_swift_file`, `write_swift_file`, `delete_swift_file`,
-`preview_status`, `select_preview`, `set_device`, `tap`, `type_text`, `reset_state`,
-`list_assets`, `search_api`.
+The tools it offers are: `project_info`, `read_swift_file`, `write_swift_file`,
+`delete_swift_file`, `preview_status`, `select_preview`, `set_device`, `tap`, `type_text`,
+`reset_state`, `list_assets` and `search_api`.
 
-## Compatibility: what to expect
+## Security
 
-- **SwiftUI Tutor → Xcode:** if your code is valid SwiftUI, it builds in Xcode unchanged.
-  SwiftUI Tutor only reads standard Swift syntax and doesn't add any language of its own.
-- **SwiftUI Tutor is not a Swift compiler.** It runs your code directly and doesn't do Swift's
-  full type checking. It does catch many common mistakes with compiler-style messages: wrong
-  argument labels, wrong argument order, assigning to a `let`, changing a property without
-  `@State` ("'self' is immutable"), passing a value where a `$binding` is needed, `ForEach`
-  over non-`Identifiable` data, `Text(someInt)`, and unknown modifiers. Some type errors that
-  Xcode reports, such as adding an `Int` to a `Double` variable, will still run here. So treat
-  Xcode as the final judge, and expect the occasional fix-up when you move code over.
-- **Looks:** layout follows SwiftUI's rules (stacks, spacers, frames, alignment, safe areas)
-  and the iOS look is closely imitated, but it isn't pixel-identical. The glass effects are a
-  frosted-blur approximation, and text uses your system font (Segoe UI on Windows).
-- **Icons:** `Image(systemName:)` draws original look-alike icons for about 400 common symbol
-  names plus about 300 aliases, and every `.fill` / `.circle` / `.circle.fill` variant of them.
-  Unknown names show a placeholder icon, but the name still works in Xcode.
-- **Not supported:** Core Data, networking (`URLSession`), UIKit views other than the photo
-  and camera pickers, maps (shown as a placeholder), charts, video players, `Canvas` and custom
-  `Path` drawing. Use Xcode for these.
-
-## Images and colours from Assets.xcassets
-
-Put `.png`/`.jpg` files anywhere in your project folder (or in an `Assets.xcassets` image
-set) and use `Image("name")` without the extension. Colour sets in `Assets.xcassets` work
-too: `Color("Brand")` uses the set's light and dark colours, and an `AccentColor` set tints
-buttons and toggles like it does on a phone.
-
-## Dropping in an Xcode project
-
-Point SwiftUI Tutor at the folder that holds your `.swift` files (the one next to the
-`.xcodeproj`). Unit-test targets (`import XCTest` / `import Testing`) and `Package.swift`
-are skipped automatically; everything else is loaded, including subfolders.
-
-## Building from source
-
-The Go source is in the `source` folder. You need Go 1.24 or newer:
-
-```
-cd source
-go build -o swiftui-tutor.exe .
-```
-
-For other platforms, use `GOOS=darwin` or `GOOS=linux`.
+Please do not report security issues in public GitHub issues. Email them privately to
+kevin@kevincoder.co.za instead. See [SECURITY.md](SECURITY.md) for what to include and what
+happens next.
 
 ## License and disclaimer
 
-MIT licence; see `LICENSE`. The program also includes CodeMirror 5, SQLite and a few Go
-libraries under their own open-source licences; see `THIRD_PARTY_NOTICES.md`.
+Switaculous is released under the MIT License; see [LICENSE](LICENSE). It includes CodeMirror,
+SQLite and a few Go libraries under their own open source licenses; see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-SwiftUI Tutor is an independent, unofficial learning project. It is not affiliated with,
-endorsed by, or sponsored by the makers of Swift, SwiftUI, iOS, iPhone or Xcode, and all
-product names belong to their respective owners. No proprietary code, fonts or icon artwork
-are included; every icon is an original drawing.
+Switaculous is an independent learning project. It is not affiliated with, endorsed by or
+sponsored by the makers of Swift, SwiftUI, iOS, iPadOS, iPhone, iPad or Xcode, and those names
+belong to their respective owners. No proprietary code, fonts or icon artwork are included;
+every icon is an original drawing.
