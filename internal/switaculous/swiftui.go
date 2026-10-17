@@ -88,10 +88,16 @@ var viewLabels = map[string]string{
 	"HelpLink":               "*",
 	"MultiDatePicker":        "*",
 	"Layout":                 "*",
+	"BarMark":                "*",
+	"LineMark":               "*",
+	"PointMark":              "*",
+	"AreaMark":               "*",
+	"RuleMark":               "*",
+	"RectangleMark":          "*",
 }
 
 var unsupportedViews = map[string]bool{
-	"VideoPlayer": true, "Chart": true, "SpriteView": true,
+	"VideoPlayer": true, "SpriteView": true,
 	"Canvas": true, "PasteButton": true, "TextFieldLink": true, "HelpLink": true, "MultiDatePicker": true,
 }
 
@@ -171,7 +177,10 @@ func init() {
 	searchSuggestions searchScopes onDrag onDrop draggable dropDestination fileImporter fileExporter photosPicker
 	scenePadding typesettingLanguage speechAnnouncementsQueued labelReservedIconWidth formStyle tabItemCompat
 	monospacedCompat inspector sheetCompat toolbarVisibility toolbarBackgroundVisibility navigationBarBackButtonTitle
-	onGeometryChange onScrollGeometryChange scrollTransition tabBarMinimizeBehavior glassEffect backgroundExtensionEffect modelContainer modelContext defersSystemGestures`) {
+	onGeometryChange onScrollGeometryChange scrollTransition tabBarMinimizeBehavior glassEffect backgroundExtensionEffect modelContainer modelContext defersSystemGestures
+	interpolationMethod lineStyle symbol symbolSize annotation chartXScale chartYScale chartXAxis chartYAxis chartLegend chartXAxisLabel
+	chartYAxisLabel chartPlotStyle chartBackground chartOverlay chartForegroundStyleScale chartSymbolScale chartXSelection chartYSelection
+	chartScrollableAxes chartXVisibleDomain chartScrollPosition chartGesture`) {
 		knownModifiers[n] = true
 	}
 	for _, n := range strings.Fields(`accessibilityLabel accessibilityHint accessibilityValue accessibilityIdentifier accessibilityHidden
@@ -187,7 +196,9 @@ func init() {
 	fileImporter fileExporter typesettingLanguage speechAnnouncementsQueued labelReservedIconWidth formStyle toolbarColorScheme
 	toolbarTitleDisplayMode statusBar statusBarHidden onScrollGeometryChange scrollTransition onGeometryChange
 	tabBarMinimizeBehavior backgroundExtensionEffect navigationBarBackButtonTitle defersSystemGestures glassEffect listItemTint menuStyle gaugeStyle
-	groupBoxStyle redacted visualEffect phaseAnimator keyframeAnimator inspector`) {
+	groupBoxStyle redacted visualEffect phaseAnimator keyframeAnimator inspector interpolationMethod lineStyle symbol symbolSize annotation
+	chartXAxisLabel chartYAxisLabel chartPlotStyle chartBackground chartOverlay chartForegroundStyleScale chartSymbolScale chartXSelection
+	chartYSelection chartScrollableAxes chartXVisibleDomain chartScrollPosition chartGesture`) {
 		noopModifiers[n] = true
 	}
 }

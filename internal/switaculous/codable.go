@@ -1,7 +1,6 @@
 package switaculous
 
 import (
-	"regexp"
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
@@ -9,6 +8,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"

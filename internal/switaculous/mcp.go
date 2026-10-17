@@ -684,10 +684,19 @@ func childNodesOf(node *RNode) []*RNode {
 		case *RNode:
 			children = append(children, nodes)
 		case []interface{}:
-			if key == "items" {
-				for _, entry := range nodes {
-					if item, ok := entry.(map[string]interface{}); ok {
-						children = append(children, tabItemNode(item))
+			for _, entry := range nodes {
+				item, ok := entry.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				switch key {
+				case "items":
+					children = append(children, tabItemNode(item))
+				case "btns":
+					if field, ok := item["tf"].(*RNode); ok {
+						children = append(children, field)
+					} else {
+						children = append(children, alertButtonNode(item))
 					}
 				}
 			}
@@ -700,6 +709,12 @@ func childNodesOf(node *RNode) []*RNode {
 		}
 	}
 	return children
+}
+
+func alertButtonNode(item map[string]interface{}) *RNode {
+	title, _ := item["t"].(string)
+	id, _ := item["id"].(string)
+	return &RNode{T: "button", P: map[string]interface{}{"id": id}, C: []*RNode{{T: "text", P: map[string]interface{}{"s": title}}}}
 }
 
 func tabItemNode(item map[string]interface{}) *RNode {
@@ -730,10 +745,19 @@ func (rt *Runtime) handleInteract(w http.ResponseWriter, r *http.Request) {
 	rt.mu.Lock()
 	var handlerID string
 	if rt.lastResult != nil {
-		nodes := append([]*RNode{rt.lastResult.Root}, rt.lastResult.Overlays...)
-		for _, node := range nodes {
-			if handlerID == "" {
-				handlerID = findHandlerByText(node, request.Action, strings.ToLower(strings.TrimSpace(request.Text)))
+		// Overlays (alerts, sheets) sit on top of the page, so they are searched
+		// first, and an exact text match beats a partial one anywhere.
+		var nodes []*RNode
+		for i := len(rt.lastResult.Overlays) - 1; i >= 0; i-- {
+			nodes = append(nodes, rt.lastResult.Overlays[i])
+		}
+		nodes = append(nodes, rt.lastResult.Root)
+		wanted := strings.ToLower(strings.TrimSpace(request.Text))
+		for _, exact := range []bool{true, false} {
+			for _, node := range nodes {
+				if handlerID == "" {
+					handlerID = findHandlerByText(node, request.Action, wanted, exact)
+				}
 			}
 		}
 	}
@@ -773,27 +797,30 @@ func nodeText(node *RNode) string {
 	return strings.ToLower(strings.TrimSpace(strings.Join(parts, " ")))
 }
 
-func findHandlerByText(node *RNode, action, wanted string) string {
+func findHandlerByText(node *RNode, action, wanted string, exact bool) string {
 	if node == nil {
 		return ""
+	}
+	matches := func(text string) bool {
+		if exact {
+			return text == wanted
+		}
+		return wanted != "" && strings.Contains(text, wanted)
 	}
 	if action == "type" && node.T == "textfield" {
 		placeholder := strings.ToLower(describeProp(node.P, "ph"))
 		current := strings.ToLower(describeProp(node.P, "v"))
-		if id, ok := node.P["id"].(string); ok && (placeholder == wanted || current == wanted || strings.Contains(placeholder, wanted)) {
+		if id, ok := node.P["id"].(string); ok && (matches(placeholder) || current == wanted) {
 			return id
 		}
 	}
 	if action == "tap" {
-		if id, ok := node.P["id"].(string); ok && id != "" && isTappable(node) {
-			text := nodeText(node)
-			if text == wanted || (wanted != "" && strings.Contains(text, wanted)) {
-				return id
-			}
+		if id, ok := node.P["id"].(string); ok && id != "" && isTappable(node) && matches(nodeText(node)) {
+			return id
 		}
 	}
 	for _, child := range childNodesOf(node) {
-		if id := findHandlerByText(child, action, wanted); id != "" {
+		if id := findHandlerByText(child, action, wanted, exact); id != "" {
 			return id
 		}
 	}

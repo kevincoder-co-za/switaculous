@@ -925,6 +925,8 @@ func (r *Render) builtin(v *ViewV, path string, env *REnv) []*RNode {
 		return []*RNode{{T: "button", ID: path, P: map[string]interface{}{"style": "borderless", "ctx": env.ctx}, C: []*RNode{r.textNode("Edit", path+"/t")}}}
 	case "Placeholder":
 		return []*RNode{{T: "placeholder", ID: path, P: map[string]interface{}{"text": describe(v.Extra["name"])}}}
+	case "Chart":
+		return r.chartView(v, path)
 	case "Map":
 		return []*RNode{{T: "placeholder", ID: path, P: map[string]interface{}{"text": "Map", "map": true}}}
 	case "Path":
@@ -2538,6 +2540,10 @@ func (r *Render) modifier(m *ModV, path string, env *REnv) []*RNode {
 				env.page.mode = symName(dm)
 			}
 		}
+		return nodes
+	case "chartXScale", "chartYScale", "chartXAxis", "chartYAxis", "chartLegend":
+		nodes := r.resolve(m.Base, path, env)
+		r.applyChartModifier(nodes, name, a)
 		return nodes
 	case "navigationSubtitle":
 		nodes := r.resolve(m.Base, path, env)

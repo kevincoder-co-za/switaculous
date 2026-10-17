@@ -556,6 +556,7 @@
       case 'color': { const el = mk('div', 'n color'); el.style.background = p.c; r = { el, h: true, v: true, kind: 'color' }; break; }
       case 'gradient': { const el = mk('div', 'n gradient'); applyPaint(el, p.g); r = { el, h: true, v: true, kind: 'color' }; break; }
       case 'shape': r = rShape(n, ctx); break;
+      case 'chart': r = rChart(n); break;
       case 'scroll': r = rScroll(n, ctx); break;
       case 'list': r = rList(n, ctx); break;
       case 'section': r = rBareSection(n, ctx); break;
@@ -701,6 +702,190 @@
     if (ctx.axis === 'v') { el.style.minHeight = min + 'px'; return { el, v: true, h: false }; }
     if (ctx.axis === 'h') { el.style.minWidth = min + 'px'; return { el, h: true, v: false }; }
     return { el, h: false, v: false };
+  }
+
+
+  function rChart(n) {
+    const el = mk('div', 'n chart');
+    el.dataset.chart = JSON.stringify(n.p || {});
+    return { el, h: true, v: true, kind: 'chart' };
+  }
+
+  // Swift Charts are drawn once the box has a size, like shapes: a plot area
+  // with a y axis on the right and an x axis below, Apple style.
+  function drawChart(el) {
+    let spec;
+    try { spec = JSON.parse(el.dataset.chart); } catch (e) { return; }
+    const w = el.offsetWidth, h = el.offsetHeight;
+    if (!w || !h) return;
+    const key = el.dataset.chart + w + 'x' + h + document.documentElement.dataset.theme;
+    if (el._drawn === key) return;
+    el._drawn = key;
+    const ns = 'http://www.w3.org/2000/svg';
+    el.innerHTML = '';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('width', w); svg.setAttribute('height', h);
+    el.appendChild(svg);
+    const add = (tag, attrs, parent) => {
+      const node = document.createElementNS(ns, tag);
+      for (const k in attrs) node.setAttribute(k, attrs[k]);
+      (parent || svg).appendChild(node);
+      return node;
+    };
+    const marks = spec.marks || [];
+    const palette = ['var(--tint)', 'var(--c-green)', 'var(--c-orange)', 'var(--c-purple)', 'var(--c-red)', 'var(--c-teal)'];
+    const seriesNames = [];
+    for (const m of marks) if (m.series && !seriesNames.includes(m.series)) seriesNames.push(m.series);
+    const colorOf = (m) => m.color || (m.series ? palette[seriesNames.indexOf(m.series) % palette.length] : 'var(--tint)');
+    const legend = seriesNames.length > 1 && !spec.hideLegend;
+    const pad = { l: 8, r: spec.hideY ? 8 : 44, t: legend ? 22 : 8, b: spec.hideX ? 8 : 22 };
+    const pw = Math.max(1, w - pad.l - pad.r), ph = Math.max(1, h - pad.t - pad.b);
+
+    // x scale: numbers and dates are continuous, strings are bands.
+    const xs = [], ys = [];
+    for (const m of marks) {
+      for (const k of ['x', 'xStart', 'xEnd']) if (m[k] != null) xs.push(m[k]);
+      for (const k of ['y', 'yStart', 'yEnd']) if (m[k] != null) ys.push(m[k]);
+    }
+    const categorical = spec.xKind === 'category';
+    let cats = [];
+    let xMin = 0, xMax = 1;
+    if (categorical) {
+      cats = spec.xDomain && spec.xDomain.length && typeof spec.xDomain[0] === 'string' ? spec.xDomain.slice() : [];
+      for (const x of xs) if (!cats.includes(x)) cats.push(x);
+    } else {
+      const nums = xs.filter(isNum);
+      if (spec.xDomain && spec.xDomain.length === 2 && isNum(spec.xDomain[0])) { xMin = spec.xDomain[0]; xMax = spec.xDomain[1]; }
+      else if (nums.length) { xMin = Math.min(...nums); xMax = Math.max(...nums); }
+      if (xMax === xMin) { xMin -= 1; xMax += 1; }
+    }
+    const bandW = categorical ? pw / Math.max(1, cats.length) : 0;
+    const sx = (x) => categorical ? pad.l + (cats.indexOf(x) + 0.5) * bandW : pad.l + (x - xMin) / (xMax - xMin) * pw;
+
+    const yNums = ys.filter(isNum);
+    let yMin = 0, yMax = 1;
+    if (spec.yDomain && spec.yDomain.length === 2 && isNum(spec.yDomain[0])) { yMin = spec.yDomain[0]; yMax = spec.yDomain[1]; }
+    else if (yNums.length) {
+      yMin = Math.min(...yNums); yMax = Math.max(...yNums);
+      if (spec.includesZero !== false) { yMin = Math.min(0, yMin); yMax = Math.max(0, yMax); }
+      const span = yMax - yMin || Math.abs(yMax) || 1;
+      if (spec.includesZero === false) { yMin -= span * 0.1; yMax += span * 0.1; }
+      else if (yMax > 0) yMax += span * 0.08;
+    }
+    if (yMax === yMin) { yMin -= 1; yMax += 1; }
+    const niceTicks = (lo, hi, count) => {
+      const raw = (hi - lo) / count;
+      const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+      const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((v) => v >= raw) || mag * 10;
+      const ticks = [];
+      for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) ticks.push(+v.toFixed(10));
+      return ticks;
+    };
+    const yTicks = niceTicks(yMin, yMax, 4);
+    if (yTicks.length) { yMin = Math.min(yMin, yTicks[0]); yMax = Math.max(yMax, yTicks[yTicks.length - 1]); }
+    const sy = (y) => pad.t + (1 - (y - yMin) / (yMax - yMin)) * ph;
+    const fmtNum = (v) => Math.abs(v) >= 1000 ? Math.round(v).toLocaleString() : +v.toFixed(2) + '';
+
+    // grid and y axis
+    for (const t of yTicks) {
+      const y = sy(t);
+      add('line', { x1: pad.l, x2: pad.l + pw, y1: y, y2: y, stroke: 'var(--c-separator)', 'stroke-width': 0.5 });
+      if (!spec.hideY) {
+        const label = add('text', { x: pad.l + pw + 6, y: y + 3.5, fill: 'var(--c-secondary)', 'font-size': 10 });
+        label.textContent = fmtNum(t);
+      }
+    }
+    // x axis labels
+    if (!spec.hideX) {
+      const labelY = h - 7;
+      if (categorical) {
+        cats.forEach((c, i) => {
+          const label = add('text', { x: pad.l + (i + 0.5) * bandW, y: labelY, fill: 'var(--c-secondary)', 'font-size': 10, 'text-anchor': 'middle' });
+          label.textContent = String(c);
+        });
+      } else {
+        const count = Math.max(2, Math.min(6, Math.floor(pw / 70)));
+        const fmtX = (v) => {
+          if (spec.xKind !== 'date') return fmtNum(v);
+          const d = new Date(v * 1000);
+          const span = xMax - xMin;
+          if (span > 60 * 86400) return d.toLocaleDateString(undefined, { month: 'short' });
+          if (span > 2 * 86400) return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+          return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+        };
+        for (let i = 0; i < count; i++) {
+          const v = xMin + (xMax - xMin) * (i + 0.5) / count;
+          const x = sx(v);
+          add('line', { x1: x, x2: x, y1: pad.t, y2: pad.t + ph, stroke: 'var(--c-separator)', 'stroke-width': 0.5, 'stroke-dasharray': '2 3' });
+          const label = add('text', { x, y: labelY, fill: 'var(--c-secondary)', 'font-size': 10, 'text-anchor': 'middle' });
+          label.textContent = fmtX(v);
+        }
+      }
+    }
+
+    // marks: lines and areas are joined per series, everything else stands alone
+    const groups = {};
+    const keyOf = (m) => m.k + '|' + (m.series || '') + '|' + (m.color || '');
+    for (const m of marks) {
+      if (m.k !== 'line' && m.k !== 'area') continue;
+      (groups[keyOf(m)] = groups[keyOf(m)] || []).push(m);
+    }
+    const pathFor = (pts, smooth) => {
+      if (!pts.length) return '';
+      let d = `M ${pts[0][0]} ${pts[0][1]}`;
+      if (!smooth || pts.length < 3) { for (let i = 1; i < pts.length; i++) d += ` L ${pts[i][0]} ${pts[i][1]}`; return d; }
+      for (let i = 0; i < pts.length - 1; i++) {
+        const p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(pts.length - 1, i + 2)];
+        const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
+        const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+        d += ` C ${c1[0]} ${c1[1]} ${c2[0]} ${c2[1]} ${p2[0]} ${p2[1]}`;
+      }
+      return d;
+    };
+    for (const key in groups) {
+      const ms = groups[key].filter((m) => m.x != null && (m.y != null || m.yEnd != null));
+      ms.sort((a, b) => (categorical ? cats.indexOf(a.x) - cats.indexOf(b.x) : a.x - b.x));
+      const pts = ms.map((m) => [sx(m.x), sy(m.y != null ? m.y : m.yEnd)]);
+      const smooth = ms.some((m) => m.smooth);
+      const color = colorOf(ms[0] || {});
+      if (ms[0] && ms[0].k === 'area') {
+        const base = sy(Math.max(yMin, Math.min(yMax, 0)));
+        const d = pathFor(pts, smooth) + ` L ${pts[pts.length - 1][0]} ${base} L ${pts[0][0]} ${base} Z`;
+        add('path', { d, fill: color, opacity: 0.25 });
+      } else {
+        add('path', { d: pathFor(pts, smooth), fill: 'none', stroke: color, 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-dasharray': ms[0] && ms[0].dash ? '6 4' : '' });
+      }
+    }
+    const barCount = marks.filter((m) => m.k === 'bar').length;
+    const defaultBarW = categorical ? bandW * 0.6 : Math.max(2, Math.min(24, pw / Math.max(1, barCount) * 0.6));
+    for (const m of marks) {
+      const color = colorOf(m);
+      if (m.k === 'bar' || m.k === 'rect') {
+        const x0 = m.xStart != null ? sx(m.xStart) : sx(m.x) - (m.width || defaultBarW) / 2;
+        const x1 = m.xEnd != null ? sx(m.xEnd) : x0 + (m.width || defaultBarW);
+        const top = m.yEnd != null ? m.yEnd : m.y;
+        const bottom = m.yStart != null ? m.yStart : Math.max(yMin, Math.min(yMax, 0));
+        if (top == null) continue;
+        const y0 = sy(Math.max(top, bottom)), y1 = sy(Math.min(top, bottom));
+        const bw = Math.max(1, x1 - x0);
+        add('rect', { x: x0, y: y0, width: bw, height: Math.max(1, y1 - y0), fill: color, rx: Math.min(bw / 2, 4) });
+      } else if (m.k === 'point') {
+        if (m.x == null || m.y == null) continue;
+        add('circle', { cx: sx(m.x), cy: sy(m.y), r: 4, fill: color });
+      } else if (m.k === 'rule') {
+        if (m.y != null && m.x == null) add('line', { x1: pad.l, x2: pad.l + pw, y1: sy(m.y), y2: sy(m.y), stroke: color, 'stroke-width': 1.5, 'stroke-dasharray': m.dash ? '6 4' : '' });
+        else if (m.x != null) add('line', { x1: sx(m.x), x2: sx(m.x), y1: m.yStart != null ? sy(m.yStart) : pad.t, y2: m.yEnd != null ? sy(m.yEnd) : pad.t + ph, stroke: color, 'stroke-width': 1.5 });
+      }
+    }
+    if (legend) {
+      let x = pad.l;
+      seriesNames.forEach((name, i) => {
+        add('circle', { cx: x + 4, cy: 9, r: 4, fill: palette[i % palette.length] });
+        const label = add('text', { x: x + 12, y: 12.5, fill: 'var(--c-secondary)', 'font-size': 10 });
+        label.textContent = name;
+        x += 20 + name.length * 5.5;
+      });
+    }
   }
 
   function rShape(n) {
@@ -2004,6 +2189,7 @@
     const scr = $('#screen');
     if (!scr) return;
     for (const el of scr.querySelectorAll('.shape')) drawShape(el);
+    for (const el of scr.querySelectorAll('.chart')) drawChart(el);
     mountMediaHosts(scr);
     // Like on a real phone, a background that touches the screen edge also fills the status bar and home indicator area.
     const dev = st.device;

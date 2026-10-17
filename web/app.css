@@ -163,6 +163,8 @@ body {
 .layer.ovlayer { z-index: 2; }
 .iso { isolation: isolate; }
 .shape { min-width: 0; min-height: 0; }
+.chart { min-width: 0; min-height: 120px; width: 100%; align-self: stretch; }
+.chart svg { display: block; overflow: visible; }
 .shape > svg { position: absolute; left: 0; top: 0; overflow: visible; }
 .sym { display: inline-flex; align-items: center; justify-content: center; line-height: 1; }
 .symsvg { width: 1.18em; height: 1.18em; overflow: visible; flex: 0 0 auto; }

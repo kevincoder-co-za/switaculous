@@ -356,12 +356,38 @@ func (ip *Interp) formatDateSym(t time.Time, s *SymV) string {
 
 // The parts of .dateTime.day().month().year() appear in the order an en-US
 // iPhone uses ("Oct 17, 2026"), whatever order the code lists them in.
+// `.weekday(.wide)` and `.month(.wide)` spell the names out; the default is
+// the abbreviated form Foundation uses.
+func dateComponentWidth(part SymPart) string {
+	if len(part.Args) == 0 {
+		return "abbreviated"
+	}
+	return symName(part.Args[0].V)
+}
+
+func symbolForWidth(full string, width string) string {
+	switch width {
+	case "wide":
+		return full
+	case "narrow":
+		return full[:1]
+	case "short":
+		if len(full) > 2 {
+			return full[:2]
+		}
+		return full
+	}
+	return full[:3]
+}
+
 func formatDateComponents(t time.Time, parts []SymPart) string {
 	has := map[string]bool{}
+	widths := map[string]string{}
 	for _, p := range parts {
 		has[p.Name] = true
+		widths[p.Name] = dateComponentWidth(p)
 	}
-	month := monthNames[t.Month()-1][:3]
+	month := symbolForWidth(monthNames[t.Month()-1], widths["month"])
 	var date string
 	switch {
 	case has["month"] && has["day"] && has["year"]:
@@ -380,7 +406,7 @@ func formatDateComponents(t time.Time, parts []SymPart) string {
 		date = strconv.Itoa(t.Year())
 	}
 	if has["weekday"] {
-		weekday := t.Weekday().String()[:3]
+		weekday := symbolForWidth(t.Weekday().String(), widths["weekday"])
 		if date == "" {
 			date = weekday
 		} else {
