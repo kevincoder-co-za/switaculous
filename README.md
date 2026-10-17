@@ -125,7 +125,7 @@ relationships and fetch descriptors. Data is saved in a real SQLite file in the 
 `AccentColor`. Add new ones from the Assets tab. The Icons tab lists the system icons the
 preview can draw (about 400 common names and their variants).
 
-**Not supported:** networking (`URLSession`), Core Data, maps, charts, video, `Canvas` and
+**Not supported:** networking (`URLSession`), Core Data, maps, video, `Canvas` and
 custom `Path` drawing, and UIKit views other than the photo and camera pickers. Switaculous
 does not do Swift's full type checking, so a few mistakes that Xcode reports will still run
 here. Xcode is always the final judge.
@@ -168,6 +168,21 @@ it works". The MCP server only accepts connections from your own computer.
 The tools it offers are: `project_info`, `read_swift_file`, `write_swift_file`,
 `delete_swift_file`, `preview_status`, `select_preview`, `set_device`, `tap`, `type_text`,
 `reset_state`, `list_assets` and `search_api`.
+
+## Releasing
+
+The version lives in the [VERSION](VERSION) file. The app, `build-release.sh`, `install.sh`,
+`install.ps1` and the Windows installer all read it, so nothing else needs editing. To cut a
+release, start from a clean `main` and run:
+
+```
+go run ./tools/release 0.0.2          # updates VERSION, commits it and tags v0.0.2
+go run ./tools/release -push 0.0.2    # the same, then pushes the commit and the tag
+```
+
+Then build the artifacts from that tag with `./build-release.sh` (and `install.ps1` or
+`packaging/windows/build-msi.ps1` for the MSI). `build-release.sh` stops if the commit's tag and
+VERSION disagree.
 
 ## Security
 

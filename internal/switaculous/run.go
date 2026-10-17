@@ -25,7 +25,9 @@ var (
 	demoFiles fs.FS
 )
 
-const version = "1.0.0"
+// Set from the VERSION file at the repository root, which tools/release keeps
+// in step with the release tag.
+var version = "dev"
 
 func printStack() { debug.PrintStack() }
 
@@ -33,7 +35,8 @@ func printStack() { debug.PrintStack() }
 // stdout, so there everything else moves to stderr.
 var consoleOutput io.Writer = os.Stdout
 
-func Run(web, demos fs.FS) {
+func Run(appVersion string, web, demos fs.FS) {
+	version = appVersion
 	webFiles, demoFiles = web, demos
 	port := flag.Int("port", 8642, "port for the preview server")
 	noOpen := flag.Bool("no-open", false, "don't open the browser automatically")

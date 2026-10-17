@@ -3,8 +3,16 @@
 # the Windows and Linux binaries, the zip, and the .deb and .rpm packages.
 # The Windows MSI is built on Windows with install.ps1 or packaging/windows/build-msi.ps1.
 set -e
-VERSION="${1:-1.0.0}"
 cd "$(dirname "$0")"
+VERSION="${1:-$(cat VERSION)}"
+
+# Building a tagged commit whose VERSION file says something else would ship
+# binaries that report the wrong version, so stop early instead.
+tag="$(git describe --exact-match --tags 2>/dev/null || true)"
+if [ -n "$tag" ] && [ "$tag" != "v$VERSION" ]; then
+    echo "This commit is tagged $tag but VERSION says $VERSION. Use: go run ./tools/release <version>" >&2
+    exit 1
+fi
 rm -rf dist && mkdir -p dist
 
 # The Windows program icon is compiled in from switaculous.ico.

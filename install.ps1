@@ -12,7 +12,7 @@
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$Version = '1.0.0'
+$Version = (Get-Content (Join-Path $PSScriptRoot 'VERSION') -Raw).Trim()
 $MinimumGoMinorVersion = 24
 $WixVersion = '5.0.2'
 $BuildToolsFolder = Join-Path $env:LOCALAPPDATA 'Switaculous\build-tools'

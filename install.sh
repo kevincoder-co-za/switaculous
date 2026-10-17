@@ -11,7 +11,7 @@
 # Run it in the Switaculous folder:  bash install.sh
 set -euo pipefail
 
-VERSION="1.0.0"
+VERSION="$(cat "$(dirname "$0")/VERSION")"
 MINIMUM_GO_MINOR_VERSION=24
 
 ask() {

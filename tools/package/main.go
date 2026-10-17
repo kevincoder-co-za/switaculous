@@ -25,7 +25,7 @@ type packageFiles struct {
 }
 
 func main() {
-	version := flag.String("version", "1.0.0", "package version")
+	version := flag.String("version", "", "package version (default: the VERSION file)")
 	arch := flag.String("arch", "amd64", "amd64 or arm64")
 	binary := flag.String("binary", "", "the switaculous binary for this architecture")
 	outDir := flag.String("out", "dist", "where to write the packages")
@@ -34,6 +34,14 @@ func main() {
 	if *binary == "" {
 		fmt.Fprintln(os.Stderr, "-binary is required")
 		os.Exit(1)
+	}
+	if *version == "" {
+		content, err := os.ReadFile("VERSION")
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "no -version given and no VERSION file found:", err)
+			os.Exit(1)
+		}
+		*version = strings.TrimSpace(string(content))
 	}
 	files := packageFiles{
 		binary:  *binary,

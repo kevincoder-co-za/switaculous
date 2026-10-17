@@ -3,12 +3,13 @@
 #   wix extension add -g WixToolset.UI.wixext/5.0.2
 # install.ps1 in the repository root sets all of this up for you.
 param(
-    [string]$Version = "1.0.0",
+    [string]$Version = "",
     [string]$Arch = "x64",
     [string]$Wix = "wix"
 )
 $ErrorActionPreference = "Stop"
 $root = Resolve-Path (Join-Path $PSScriptRoot "..\..")
+if (-not $Version) { $Version = (Get-Content (Join-Path $root "VERSION") -Raw).Trim() }
 $msiFolder = Join-Path $root "dist\msi-$Arch"
 $binary = Join-Path $msiFolder "switaculous.exe"
 New-Item -ItemType Directory -Force -Path $msiFolder | Out-Null
