@@ -921,7 +921,10 @@ func (ip *Interp) builtinConstruct(name string, args []ArgV, pos Pos, env *Env) 
 			}
 		}
 		if v, ok := argNamed(args, "grouping"); ok {
-			by, _ := argNamed(args, "by")
+			by, hasBy := argNamed(args, "by")
+			if !hasBy {
+				by = args[len(args)-1].V
+			}
 			for _, e := range ip.iterate(v, pos) {
 				k := ip.call1(by, pos, e)
 				cur, ok := d.Get(k)
@@ -1039,12 +1042,14 @@ func (ip *Interp) builtinConstruct(name string, args []ArgV, pos Pos, env *Env) 
 		return a0
 	case "Timer", "DispatchQueue", "Calendar", "Locale", "TimeZone":
 		return newObj(name)
+	case "Optional":
+		return argAt(args, 0)
 	case "Gradient":
 		return &ViewV{Kind: "Gradient", Args: args, Pos: pos}
 	case "GridItem", "EdgeInsets", "UnitPoint", "Alert", "ToolbarItem", "ToolbarItemGroup", "Animation", "ToolbarItemPlacement",
 		"Text.Case", "EdgeInsetsAlias", "StrokeStyle", "LocalizedError", "ActionSheet", "Transaction":
 		return &ViewV{Kind: name, Args: args, Pos: pos}
-	case "URLSession", "FileManager", "NotificationCenter":
+	case "URLSession", "NotificationCenter":
 		ip.fail(pos, "'%s' is not supported by the SwiftUI preview", name)
 	}
 	ip.fail(pos, "'%s' cannot be constructed in the preview", name)
@@ -1236,7 +1241,7 @@ func init() {
 	squareRoot truncatingRemainder formatted addingTimeInterval timeIntervalSince distance advanced starts count isEmpty
 	localizedCaseInsensitiveContains localizedStandardContains caseInsensitiveCompare elementsEqual index drop padding
 	compare lowercasedFirst capitalized signum clamped prefixWhile string date component isDateInToday startOfDay
-	async asyncAfter invalidate autoconnect scanHexInt64 scanInt dateComponents description uuidString`) {
+	async asyncAfter invalidate autoconnect scanHexInt64 scanInt dateComponents description uuidString write`) {
 		builtinMethodNames[n] = true
 	}
 }
@@ -1513,6 +1518,16 @@ func (ip *Interp) builtinProperty(v Value, name string, pos Pos) (Value, bool) {
 		case "path":
 			return x.S, true
 		}
+		if v, ok := ip.urlProperty(x, name); ok {
+			return v, true
+		}
+		if urlMethodNames[name] {
+			u := x
+			return &NativeV{Name: name, Fn: func(c *CallCtx) Value {
+				result, _ := ip.urlMethod(u, name, c.Args, c.Pos)
+				return result
+			}}, true
+		}
 	case *ColorV:
 		switch name {
 		case "gradient":
@@ -1573,9 +1588,24 @@ func (ip *Interp) builtinProperty(v Value, name string, pos Pos) (Value, bool) {
 		if v, ok := x.Props[name]; ok {
 			return v, true
 		}
+		if x.Kind == "Calendar" {
+			if v, ok := calendarProperty(name); ok {
+				return v, true
+			}
+		}
+		if x.Kind == "Bundle" {
+			if v, ok := ip.bundleProperty(name); ok {
+				return v, true
+			}
+		}
+		if x.Kind == "FileManager" {
+			if v, ok := ip.fileManagerProperty(name); ok {
+				return v, true
+			}
+		}
 		switch x.Kind {
 		case "DispatchQueue", "Calendar", "Scanner", "DateFormatter", "NumberFormatter", "Haptics", "Timer", "RelativeDateTimeFormatter", "ISO8601DateFormatter", "DateComponentsFormatter", "Gesture",
-			"JSONEncoder", "JSONDecoder", "PropertyListEncoder", "PropertyListDecoder", "UserDefaults", "Bundle":
+			"JSONEncoder", "JSONDecoder", "PropertyListEncoder", "PropertyListDecoder", "UserDefaults", "Bundle", "FileManager", "ImageRenderer":
 			o := x
 			return &NativeV{Name: name, Fn: func(c *CallCtx) Value { return ip.nativeObjMethod(o, name, c.Args, c.Pos, c.Env) }}, true
 		case "Locale":
@@ -1729,76 +1759,8 @@ func (ip *Interp) nativeObjMethod(o *NativeObj, name string, args []ArgV, pos Po
 			return o
 		}
 	case "Calendar":
-		switch name {
-		case "component":
-			c, _ := argAt(args, 0).(*SymV)
-			d, _ := argNamed(args, "from")
-			dt, ok := d.(*DateV)
-			if !ok || c == nil {
-				return 0
-			}
-			t := dt.T
-			switch c.Name() {
-			case "year":
-				return t.Year()
-			case "month":
-				return int(t.Month())
-			case "day":
-				return t.Day()
-			case "hour":
-				return t.Hour()
-			case "minute":
-				return t.Minute()
-			case "second":
-				return t.Second()
-			case "weekday":
-				return int(t.Weekday()) + 1
-			}
-			return 0
-		case "date":
-			comp, _ := argNamed(args, "byAdding")
-			val, _ := argNamed(args, "value")
-			to, _ := argNamed(args, "to")
-			dt, ok := to.(*DateV)
-			if !ok {
-				return nil
-			}
-			n, _ := toInt(val)
-			t := dt.T
-			if c, ok := comp.(*SymV); ok {
-				switch c.Name() {
-				case "day":
-					t = t.AddDate(0, 0, n)
-				case "month":
-					t = t.AddDate(0, n, 0)
-				case "year":
-					t = t.AddDate(n, 0, 0)
-				case "hour":
-					t = t.Add(time.Duration(n) * time.Hour)
-				case "minute":
-					t = t.Add(time.Duration(n) * time.Minute)
-				case "second":
-					t = t.Add(time.Duration(n) * time.Second)
-				case "weekOfYear":
-					t = t.AddDate(0, 0, 7*n)
-				}
-			}
-			return &DateV{T: t}
-		case "isDateInToday":
-			dt, ok := argAt(args, 0).(*DateV)
-			if !ok {
-				return false
-			}
-			y1, m1, d1 := dt.T.Date()
-			y2, m2, d2 := time.Now().Date()
-			return y1 == y2 && m1 == m2 && d1 == d2
-		case "startOfDay":
-			dt, ok := argAt(args, 0).(*DateV)
-			if !ok {
-				return nil
-			}
-			y, m, d := dt.T.Date()
-			return &DateV{T: time.Date(y, m, d, 0, 0, 0, 0, dt.T.Location())}
+		if result, ok := ip.calendarMethod(name, args, pos); ok {
+			return result
 		}
 	case "DateFormatter", "ISO8601DateFormatter", "RelativeDateTimeFormatter":
 		switch name {
@@ -1929,6 +1891,8 @@ func (ip *Interp) builtinMethod(recv Value, ref *Ref, name string, args []ArgV, 
 		return ip.arrayMethod(x, ref, name, args, pos)
 	case string:
 		return ip.stringMethod(x, ref, name, args, pos)
+	case *URLV:
+		return ip.urlMethod(x, name, args, pos)
 	case Character:
 		switch name {
 		case "uppercased":
@@ -2639,6 +2603,13 @@ func (ip *Interp) stringMethod(s string, ref *Ref, name string, args []ArgV, pos
 		return v
 	}
 	switch name {
+	case "write":
+		target, _ := argNamed(args, "to")
+		if target == nil {
+			target, _ = argNamed(args, "toFile")
+		}
+		ip.writeSandboxFile(target, []byte(s), pos)
+		return Void, true
 	case "uppercased":
 		return strings.ToUpper(s), true
 	case "lowercased":

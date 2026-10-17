@@ -269,7 +269,8 @@ func showNativeFolderDialog(save bool, title, defaultName string) (string, error
 	switch runtime.GOOS {
 	case "windows":
 		script := fmt.Sprintf(windowsDialogScript, powerShellString(title), powerShellString(defaultName), save)
-		command = exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-STA", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encodePowerShell(script))
+		command = exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-STA", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encodePowerShell(script))
+		hideConsoleWindow(command)
 	case "darwin":
 		script := fmt.Sprintf(`POSIX path of (choose folder with prompt %q)`, title)
 		if save {

@@ -690,6 +690,7 @@
     if (axis !== 'z') el.style.gap = sp + 'px';
     if (axis === 'v') el.style.alignItems = hAlign[p.al] || 'center';
     if (axis === 'h') el.style.alignItems = vAlign[p.al] || 'center';
+    if (axis === 'h' && p.wrap) { el.style.flexWrap = 'wrap'; el.style.rowGap = sp + 'px'; }
     const f = renderMany(n.c, ctx, axis, el, p.al);
     return { el, h: f.h, v: f.v };
   }
@@ -1384,6 +1385,11 @@
       row.appendChild(left);
       const title = mk('div', 'nbtitle');
       if (p.prin) { title.classList.add('prin'); title.appendChild(renderGroup(p.prin, sub).el); }
+      else if (p.subtitle && p.mode !== 'large') {
+        const tt = mk('div', 'nbtitletext'); tt.textContent = p.title || '';
+        const st = mk('div', 'nbsubtitle'); st.textContent = p.subtitle;
+        title.classList.add('stacked'); title.appendChild(tt); title.appendChild(st);
+      }
       else title.textContent = p.title || '';
       row.appendChild(title);
       row.appendChild(right);
@@ -1393,7 +1399,10 @@
     }
     const body = mk('div', 'pagebody');
     const header = [];
-    if (p.mode === 'large' && p.title && !p.hideBar) { const lt = mk('div', 'largetitle'); lt.textContent = p.title; header.push(lt); }
+    if (p.mode === 'large' && p.title && !p.hideBar) {
+      const lt = mk('div', 'largetitle'); lt.textContent = p.title; header.push(lt);
+      if (p.subtitle) { const ls = mk('div', 'largesubtitle'); ls.textContent = p.subtitle; header.push(ls); }
+    }
     if (p.search) {
       const sb = mk('div', 'searchbox');
       sb.innerHTML = window.SFSymbol('magnifyingglass').svg;

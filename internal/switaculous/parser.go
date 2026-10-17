@@ -500,6 +500,21 @@ func (p *Parser) parseConds() []Cond {
 func (p *Parser) parseFor() Stmt {
 	pos := p.t().Pos
 	p.next()
+	// `for try await x in stream` / `for await x in stream`: the sequence is
+	// awaited as a whole, the loop itself reads like any other for-in.
+	var tryKind string
+	isAwait := false
+	if p.isKw("try") {
+		p.next()
+		tryKind = "try"
+		if p.t().K == tOp && p.t().Postfix {
+			tryKind += p.next().S
+		}
+	}
+	if p.isKw("await") {
+		p.next()
+		isAwait = true
+	}
 	if p.isKw("case") {
 		p.next()
 	}
@@ -511,6 +526,12 @@ func (p *Parser) parseFor() Stmt {
 	p.expectKw("in")
 	p.noTrail++
 	seq := p.parseExpr()
+	if isAwait {
+		seq = &AwaitExpr{Pos: seq.P(), X: seq}
+	}
+	if tryKind != "" {
+		seq = &TryExpr{Pos: seq.P(), Kind: tryKind, X: seq}
+	}
 	var where Expr
 	if p.isKw("where") {
 		p.next()
@@ -1536,6 +1557,11 @@ func (p *Parser) parsePostfix(x Expr) Expr {
 				p.errf(n.Pos, "expected member name following '.'")
 			}
 			x = &MemberExpr{Pos: n.Pos, X: x, Name: name}
+		case t.K == tPunct && t.S == "(" && !t.NL && p.isCompoundNameRef():
+			// `AlarmTone.init(rawValue:)` / `UUID.init(uuidString:)` / `foo(a:b:)`:
+			// a reference to a function by its full name, not a call. Desugar to
+			// `{ p0, p1 in foo(a: p0, b: p1) }` so it can be passed to map/flatMap.
+			x = p.parseCompoundNameRef(x)
 		case t.K == tPunct && t.S == "(" && !t.NL:
 			args := p.parseArgs("(", ")")
 			x = &CallExpr{Pos: t.Pos, Fn: x, Args: args}
@@ -1577,6 +1603,52 @@ done:
 		x = &OptChain{Pos: x.P(), X: x}
 	}
 	return x
+}
+
+// isCompoundNameRef reports whether the tokens at the current '(' spell a
+// compound function name like `(rawValue:)` or `(a:b:)`: only labels, each
+// followed directly by ':', with no expressions between them.
+func (p *Parser) isCompoundNameRef() bool {
+	if !p.isP("(") {
+		return false
+	}
+	i := 1
+	labels := 0
+	for {
+		t := p.peek(i)
+		if t.K == tPunct && t.S == ")" {
+			return labels > 0
+		}
+		if t.K != tIdent {
+			return false
+		}
+		c := p.peek(i + 1)
+		if c.K != tPunct || c.S != ":" {
+			return false
+		}
+		labels++
+		i += 2
+	}
+}
+
+func (p *Parser) parseCompoundNameRef(fn Expr) Expr {
+	open := p.expectP("(")
+	c := &ClosureExpr{Pos: open.Pos, HasSig: true}
+	call := &CallExpr{Pos: open.Pos, Fn: fn}
+	for !p.isP(")") {
+		label := p.expectIdent()
+		p.expectP(":")
+		name := fmt.Sprintf("__ref%d", len(c.Params))
+		c.Params = append(c.Params, &Param{Name: name})
+		argLabel := label
+		if argLabel == "_" {
+			argLabel = ""
+		}
+		call.Args = append(call.Args, Arg{Label: argLabel, X: &Ident{Pos: open.Pos, Name: name}})
+	}
+	p.expectP(")")
+	c.Body = []Stmt{&ExprStmt{X: call}}
+	return c
 }
 
 func isTypeish(x Expr) bool {

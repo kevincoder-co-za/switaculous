@@ -409,6 +409,9 @@ body {
 .page.large.scrolled .navbar .nbtitle { opacity: 1; }
 .navbar.hasbg { background: var(--barbg); }
 .largetitle { font-size: 34px; line-height: 41px; font-weight: 700; letter-spacing: .37px; padding: 3px 16px 8px; flex: 0 0 auto; align-self: stretch; text-align: left; }
+.largesubtitle { font-size: 15px; line-height: 20px; color: var(--c-secondary); padding: 0 16px 8px; margin-top: -6px; flex: 0 0 auto; align-self: stretch; text-align: left; }
+.navbar .nbtitle.stacked { display: flex; flex-direction: column; align-items: center; line-height: 1.15; }
+.navbar .nbtitle.stacked .nbsubtitle { font-size: 12px; font-weight: 400; color: var(--c-secondary); }
 .searchbox { margin: 2px 16px 10px; height: 36px; border-radius: 10px; background: var(--c-tertiarySystemFill); display: flex; align-items: center; gap: 6px; padding: 0 8px; color: var(--c-secondary); flex: 0 0 auto; align-self: stretch; }
 .searchbox input { flex: 1; border: 0; outline: 0; background: transparent; font: inherit; color: var(--c-primary); user-select: text; }
 .searchbox input::placeholder { color: var(--c-secondary); }

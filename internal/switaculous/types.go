@@ -145,6 +145,12 @@ func (ip *Interp) Load(files map[string][]Stmt) (err error) {
 			case *TypeDecl:
 				if d.Kind == "extension" {
 					exts = append(exts, d)
+					// `extension Locale { enum Weekday {...} }` adds a nested type.
+					for _, m := range d.Members {
+						if nd, ok := m.(*TypeDecl); ok && nd.Kind != "extension" {
+							typeDecls = append(typeDecls, ip.registerType(nd, d.Name)...)
+						}
+					}
 				} else {
 					typeDecls = append(typeDecls, ip.registerType(d, "")...)
 				}
@@ -273,7 +279,7 @@ func (ip *Interp) isKnownProtocol(name string) bool {
 		"Sendable", "CaseIterable", "RawRepresentable", "BinaryInteger", "FloatingPoint", "Numeric", "StringProtocol",
 		"RandomAccessCollection", "MutableCollection", "LocalizedError", "Decodable", "Encodable", "GroupBoxStyle",
 		"ProgressViewStyle", "PickerStyle", "ListStyle", "EnvironmentKey", "PreferenceKey", "Animatable", "BinaryFloatingPoint",
-		"AnyObject", "Any":
+		"AnyObject", "Any", "Layout":
 		return true
 	}
 	return false
@@ -496,6 +502,16 @@ func (ip *Interp) staticField(ti *TypeInfo, name string) (*Slot, bool) {
 					env.staticT = owner
 					return ip.runGetter(d.Get, env, nil, nil, d.Type)
 				}}
+				if d.Set != nil {
+					s.Set = func(v Value) {
+						env := newEnv(ip.globals)
+						env.staticT = owner
+						env.vars[nz(d.SetName, "newValue")] = &Slot{V: ip.coerce(v, d.Type, nil), Let: true}
+						ip.execBlock(d.Set, env, &FnCtx{})
+					}
+				} else {
+					s.Let = true
+				}
 				return s, true
 			}
 			env := newEnv(ip.globals)
@@ -587,6 +603,14 @@ func (ip *Interp) memberwiseParams(ti *TypeInfo) []*Param {
 }
 
 func (ip *Interp) instantiate(ti *TypeInfo, args []ArgV, pos Pos) Value {
+	if ti.Conforms["Layout"] && len(args) > 0 && args[len(args)-1].Trailing {
+		// A custom Layout used as a container: `WrappingHStack(spacing: 8) { ... }`.
+		// The preview can't run sizeThatFits/placeSubviews, so it shows the
+		// children as a wrapping row, which is what most custom layouts do.
+		content := args[len(args)-1]
+		layout := ip.instantiate(ti, args[:len(args)-1], pos)
+		return &ViewV{Kind: "Layout", Args: []ArgV{content}, Pos: pos, Extra: map[string]Value{"layout": layout}}
+	}
 	switch ti.Kind {
 	case "protocol":
 		ip.fail(pos, "'any %s' cannot be constructed because it has no accessible initializers", ti.Name)

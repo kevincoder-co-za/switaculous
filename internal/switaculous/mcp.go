@@ -670,23 +670,42 @@ func outlineOf(node *RNode, depth int) string {
 // properties rather than its children; this walks all of them.
 func childNodesOf(node *RNode) []*RNode {
 	children := append([]*RNode(nil), node.C...)
+	for _, mod := range node.M {
+		for _, value := range mod.A {
+			if nodes, ok := value.([]*RNode); ok {
+				children = append(children, nodes...)
+			}
+		}
+	}
 	for key, value := range node.P {
 		switch nodes := value.(type) {
 		case []*RNode:
 			children = append(children, nodes...)
 		case *RNode:
 			children = append(children, nodes)
+		case []interface{}:
+			if key == "items" {
+				for _, entry := range nodes {
+					if item, ok := entry.(map[string]interface{}); ok {
+						children = append(children, tabItemNode(item))
+					}
+				}
+			}
 		case []map[string]interface{}:
 			if key == "items" {
 				for _, item := range nodes {
-					title, _ := item["t"].(string)
-					id, _ := item["id"].(string)
-					children = append(children, &RNode{T: "tabitem", P: map[string]interface{}{"id": id}, C: []*RNode{{T: "text", P: map[string]interface{}{"s": title}}}})
+					children = append(children, tabItemNode(item))
 				}
 			}
 		}
 	}
 	return children
+}
+
+func tabItemNode(item map[string]interface{}) *RNode {
+	title, _ := item["t"].(string)
+	id, _ := item["id"].(string)
+	return &RNode{T: "tabitem", P: map[string]interface{}{"id": id}, C: []*RNode{{T: "text", P: map[string]interface{}{"s": title}}}}
 }
 
 func describeProp(props map[string]interface{}, key string) string {

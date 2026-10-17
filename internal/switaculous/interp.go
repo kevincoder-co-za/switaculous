@@ -1097,6 +1097,9 @@ func (ip *Interp) eval(e Expr, env *Env) Value {
 	case *ImplicitMember:
 		return sym(x.Name)
 	case *MemberExpr:
+		if mark, ok := x.X.(*OptMark); ok && (x.Name == "none" || x.Name == "some") {
+			return ip.optionalTypeMember(mark, x, env)
+		}
 		base := ip.eval(x.X, env)
 		return ip.getMember(base, x.Name, x.Pos, env)
 	case *CallExpr:
@@ -1552,9 +1555,17 @@ func (ip *Interp) implicitSelfMember(self Value, selfT *TypeInfo, name string) (
 		}
 		if native, isNative := self.(*NativeObj); isNative {
 			// Inside `extension Bundle`, plain names are globals (fatalError, Data)
-			// unless the object really has a property of that name.
-			v, found := native.Props[name]
-			return v, found
+			// unless the object really has a property or method of that name.
+			if v, found := native.Props[name]; found {
+				return v, true
+			}
+			if native.Kind == "Calendar" && calendarMethodNames[name] {
+				return ip.getMember(self, name, Pos{}, nil), true
+			}
+			if native.Kind == "Calendar" {
+				return calendarProperty(name)
+			}
+			return nil, false
 		}
 		if v, ok := ip.builtinProperty(self, name, Pos{}); ok {
 			return v, true
@@ -2200,6 +2211,22 @@ func (ip *Interp) evalArgs(args []Arg, env *Env, localized bool) []ArgV {
 	return out
 }
 
+// `ReadingKind?.none` and `Int?.some(3)` spell Optional's cases on a type;
+// on any other value `x?.none` is ordinary optional chaining.
+func (ip *Interp) optionalTypeMember(mark *OptMark, x *MemberExpr, env *Env) Value {
+	inner := ip.eval(mark.X, env)
+	if _, isType := inner.(*TypeV); !isType {
+		if inner == nil {
+			panic(&OptNilSignal{})
+		}
+		return ip.getMember(inner, x.Name, x.Pos, env)
+	}
+	if x.Name == "none" {
+		return nil
+	}
+	return &NativeV{Name: "some", Fn: func(c *CallCtx) Value { return argAt(c.Args, 0) }}
+}
+
 func (ip *Interp) evalCall(x *CallExpr, env *Env) Value {
 	switch fn := x.Fn.(type) {
 	case *MemberExpr:
@@ -2225,6 +2252,13 @@ func (ip *Interp) evalCall(x *CallExpr, env *Env) Value {
 		return &SymV{Parts: []SymPart{{Name: fn.Name, Args: args, Called: true}}}
 	}
 	callee := ip.eval(x.Fn, env)
+	if id, ok := x.Fn.(*Ident); ok && !isCallable(callee) {
+		// A type may have both `var readings` and `func readings(on:)`; a call
+		// with arguments means the method, even when the property shadows it.
+		if method := ip.implicitSelfMethod(id.Name, env); method != nil {
+			callee = method
+		}
+	}
 	localized := false
 	if tv, ok := callee.(*TypeV); ok && localizedTypes[tv.Name] && tv.T == nil {
 		localized = true
@@ -2232,6 +2266,41 @@ func (ip *Interp) evalCall(x *CallExpr, env *Env) Value {
 	args := ip.evalArgs(x.Args, env, localized)
 	ip.directCall = true
 	return ip.callValue(callee, args, x.Pos, env)
+}
+
+func isCallable(v Value) bool {
+	switch v.(type) {
+	case *FuncV, *OverloadV, *NativeV, *TypeV, *SymV:
+		return true
+	}
+	return false
+}
+
+func (ip *Interp) implicitSelfMethod(name string, env *Env) Value {
+	for e := env; e != nil; e = e.parent {
+		if e.self == nil {
+			continue
+		}
+		ti := typeInfoOf(e.self)
+		if ti == nil {
+			ti = e.selfT
+		}
+		if ti == nil {
+			continue
+		}
+		if ms := ip.findMethods(ti, name); ms != nil {
+			return ip.bindMethods(ms, e.self, ti, false)
+		}
+	}
+	return nil
+}
+
+func (ip *Interp) hasMemberNamed(recv Value, name string) bool {
+	ti := typeInfoOf(recv)
+	if ti == nil {
+		return false
+	}
+	return ti.field(name) != nil || ip.findComputed(ti, name) != nil || ip.findMethods(ti, name) != nil
 }
 
 func (ip *Interp) callValue(callee Value, args []ArgV, pos Pos, env *Env) Value {
@@ -2593,6 +2662,9 @@ func (ip *Interp) callMethod(recv Value, recvRef *Ref, name string, args []ArgV,
 		fn := ip.typeMember(r, name, pos)
 		return ip.callValue(fn, args, pos, env)
 	case *StructV, *ObjectV, *EnumV:
+		if (name == "map" || name == "flatMap") && len(args) == 1 && !ip.hasMemberNamed(recv, name) {
+			return ip.callValue(args[0].V, []ArgV{{V: recv}}, pos, env)
+		}
 		fn := ip.getMember(recv, name, pos, env)
 		mut := false
 		switch f := fn.(type) {
@@ -2760,10 +2832,19 @@ func (ip *Interp) typeMemberMaybe(t *TypeV, name string, pos Pos) Value {
 	if name == "self" || name == "Type" {
 		return t
 	}
-	if nt, ok := ip.types[ti.Name+"."+name]; ok {
+	if nt, ok := ip.types[qualifiedTypeName(ti)+"."+name]; ok {
 		return &TypeV{Name: nt.Name, T: nt}
 	}
 	return nil
+}
+
+// Nested types are registered under their full path (`Alarm.Schedule.Relative`),
+// so a type two levels deep is found through its outer name, not just its own.
+func qualifiedTypeName(ti *TypeInfo) string {
+	if ti.Outer != "" {
+		return ti.Outer + "." + ti.Name
+	}
+	return ti.Name
 }
 
 // `Swift.min(...)` and `Foundation.Date()` name the module explicitly.
@@ -2794,6 +2875,9 @@ func (ip *Interp) typeMember(t *TypeV, name string, pos Pos) Value {
 			if ms, ok := et.StaticMethods[name]; ok {
 				return ip.bindMethods(ms, nil, et, true)
 			}
+		}
+		if nt, ok := ip.types[t.Name+"."+name]; ok {
+			return &TypeV{Name: nt.Name, T: nt}
 		}
 		return ip.builtinStatic(t.Name, name, pos)
 	}

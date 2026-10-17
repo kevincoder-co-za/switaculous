@@ -289,7 +289,8 @@ func (ip *Interp) mediaMethod(v Value, name string, args []ArgV, pos Pos) (Value
 		case "base64EncodedString":
 			return base64.StdEncoding.EncodeToString(x.Bytes), true
 		case "write":
-			ip.warn(pos, "Data.write(to:) does nothing in the preview")
+			target, _ := argNamed(args, "to")
+			ip.writeSandboxFile(target, x.Bytes, pos)
 			return Void, true
 		}
 	case *UIImageV:

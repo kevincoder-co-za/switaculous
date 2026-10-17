@@ -390,6 +390,26 @@ func (rt *Runtime) reloadLocked() {
 		}
 		files[f] = stmts
 	}
+	// Frameworks the preview can't run (AlarmKit, StoreKit, ...) are stood in
+	// for by embedded Swift shims, loaded only when the project imports them.
+	for _, fw := range importedFrameworks(rt.sources) {
+		src, ok := shimSource(fw)
+		if !ok {
+			continue
+		}
+		path := shimPath(fw)
+		rt.sources[path] = src
+		stmts, err := ParseFile(path, src)
+		if err != nil {
+			if se, ok := err.(*SwiftError); ok {
+				rt.errs = append(rt.errs, rt.errInfo(se.Pos, se.Msg, "compile"))
+			} else {
+				rt.errs = append(rt.errs, ErrInfo{Msg: err.Error(), File: path, Kind: "compile"})
+			}
+			continue
+		}
+		files[path] = stmts
+	}
 	if len(rt.errs) > 0 {
 		rt.logf("error", "Build failed: %s", rt.errs[0].Msg)
 		rt.broadcastLocked(nil)
@@ -496,7 +516,15 @@ func (rt *Runtime) choosePreview(ip *Interp, refs []PreviewRef) string {
 
 func (rt *Runtime) rootValue(ip *Interp, id string, r *Render, env *REnv) Value {
 	if id == "app" && ip.mainApp != nil {
-		inst := ip.instantiate(ip.mainApp, nil, Pos{})
+		// SwiftUI creates the App struct once for the whole run, so its init and
+		// the default values of its @State properties must not run again on
+		// every render (a store created there may start Tasks, for example).
+		ck := fmt.Sprintf("%d|app", rt.gen)
+		inst, ok := rt.previewCache[ck]
+		if !ok {
+			inst = ip.instantiate(ip.mainApp, nil, Pos{})
+			rt.previewCache = map[string]Value{ck: inst}
+		}
 		if sv, ok := inst.(*StructV); ok {
 			inst = r.prepareStruct(sv, ":"+ip.mainApp.Name, env)
 		}
@@ -754,6 +782,13 @@ func (ip *Interp) spawnTask(f Value, pos Pos) Value {
 		return h
 	}
 	gen := rt.gen
+	if fv, ok := f.(*FuncV); ok && len(fv.Body) > 0 && os.Getenv("SWIT_DEBUG_TASKS") != "" {
+		if es, ok := fv.Body[0].(*ExprStmt); ok {
+			fmt.Fprintf(os.Stderr, "spawnTask from %s\n", es.X.P())
+		} else {
+			fmt.Fprintf(os.Stderr, "spawnTask from %T\n", fv.Body[0])
+		}
+	}
 	go func() {
 		rt.mu.Lock()
 		defer rt.mu.Unlock()

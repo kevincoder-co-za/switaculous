@@ -1,6 +1,7 @@
 package switaculous
 
 import (
+	"regexp"
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
@@ -104,6 +105,17 @@ func (ip *Interp) constructCodableType(name string, args []ArgV, pos Pos) (Value
 		coder := newObj(name)
 		coder.Props["outputFormatting"] = &ArrayV{}
 		return coder, true
+	case "FileManager":
+		return newObj("FileManager"), true
+	case "ImageRenderer":
+		renderer := newObj("ImageRenderer")
+		renderer.Props["content"], _ = argNamed(args, "content")
+		renderer.Props["scale"] = 3.0
+		renderer.Props["isOpaque"] = false
+		renderer.Props["proposedSize"] = sym("unspecified")
+		renderer.Props["uiImage"] = nil
+		renderer.Props["cgImage"] = nil
+		return renderer, true
 	}
 	return nil, false
 }
@@ -114,6 +126,8 @@ func (ip *Interp) codableStatic(typeName, name string) (Value, bool) {
 		return newObj("UserDefaults"), true
 	case "Bundle.main":
 		return newObj("Bundle"), true
+	case "FileManager.default":
+		return newObj("FileManager"), true
 	}
 	return nil, false
 }
@@ -136,6 +150,13 @@ func (ip *Interp) codableNativeObjMethod(o *NativeObj, name string, args []ArgV,
 		return ip.userDefaultsMethod(name, args, pos)
 	case "Bundle":
 		return ip.bundleMethod(name, args, pos)
+	case "FileManager":
+		return ip.fileManagerMethod(name, args, pos)
+	case "ImageRenderer":
+		if name == "render" {
+			ip.warn(pos, "ImageRenderer.render does nothing in the preview; the drawing callback is never called")
+			return Void, true
+		}
 	}
 	return nil, false
 }
@@ -747,6 +768,64 @@ func (ip *Interp) projectResourcePath(fileName string) string {
 		return nil
 	})
 	return found
+}
+
+// Bundle.main in the preview answers for the project folder: the version
+// comes from Info.plist when there is one, with Xcode's defaults otherwise.
+func (ip *Interp) bundleProperty(name string) (Value, bool) {
+	switch name {
+	case "infoDictionary":
+		info := newDict()
+		info.Set("CFBundleShortVersionString", "1.0")
+		info.Set("CFBundleVersion", "1")
+		info.Set("CFBundleName", ip.projectName())
+		info.Set("CFBundleDisplayName", ip.projectName())
+		for key, value := range ip.infoPlistStrings() {
+			info.Set(key, value)
+		}
+		return info, true
+	case "bundleIdentifier":
+		if id, ok := ip.infoPlistStrings()["CFBundleIdentifier"]; ok {
+			return id, true
+		}
+		return "com.example." + strings.ToLower(ip.projectName()), true
+	case "bundlePath", "resourcePath":
+		if ip.rt != nil {
+			return ip.rt.dir, true
+		}
+		return "", true
+	case "bundleURL", "resourceURL":
+		if ip.rt != nil {
+			return &URLV{S: ip.rt.dir}, true
+		}
+		return nil, true
+	}
+	return nil, false
+}
+
+func (ip *Interp) projectName() string {
+	if ip.rt == nil {
+		return "Preview"
+	}
+	return filepath.Base(ip.rt.dir)
+}
+
+var plistStringEntry = regexp.MustCompile(`(?s)<key>([^<]+)</key>\s*<string>([^<]*)</string>`)
+
+func (ip *Interp) infoPlistStrings() map[string]string {
+	values := map[string]string{}
+	path := ip.projectResourcePath("Info.plist")
+	if path == "" {
+		return values
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return values
+	}
+	for _, match := range plistStringEntry.FindAllStringSubmatch(string(data), -1) {
+		values[match[1]] = match[2]
+	}
+	return values
 }
 
 func (ip *Interp) bundleMethod(name string, args []ArgV, pos Pos) (Value, bool) {

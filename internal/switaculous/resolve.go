@@ -64,6 +64,7 @@ type NavCtx struct {
 
 type PageCtx struct {
 	title    string
+	subtitle string
 	titleSet bool
 	mode     string
 	lead     []*RNode
@@ -339,7 +340,7 @@ func (r *Render) resolve(v Value, path string, env *REnv) []*RNode {
 			return r.resolve(c, path, env)
 		}
 	}
-	r.fail(Pos{}, "type '%s' cannot conform to 'View' (only views can appear in a view builder)", typeName(v))
+	r.fail(Pos{}, "type '%s' cannot conform to 'View' (only views can appear in a view builder) at %s", typeName(v), path)
 	return nil
 }
 
@@ -389,6 +390,21 @@ func (r *Render) prepareStruct(sv *StructV, p string, env *REnv) *StructV {
 		}
 	}
 	return inst
+}
+
+// `Image(.logoBadge)` names an image set through Xcode's generated symbol;
+// `Image("LogoBadge")` names it directly.
+func (r *Render) imageAssetName(v Value) string {
+	symbol, ok := v.(*SymV)
+	if !ok || r.ip.rt == nil {
+		return describe(v)
+	}
+	for asset := range r.ip.rt.assets {
+		if assetSymbolName(asset) == symbol.Name() {
+			return asset
+		}
+	}
+	return symbol.Name()
 }
 
 func (r *Render) userView(sv *StructV, path string, env *REnv) []*RNode {
@@ -493,7 +509,7 @@ func (r *Render) builtin(v *ViewV, path string, env *REnv) []*RNode {
 			out = append(out, r.resolve(k, path+"/"+key, env)...)
 		}
 		return out
-	case "Group", "WindowGroup", "ControlGroupContent", "ScrollViewReaderContent", "Settings":
+	case "Group", "WindowGroup", "ControlGroupContent", "ScrollViewReaderContent", "Settings", "GlassEffectContainer":
 		return r.resolve(r.callBuilder(v.closure("content")), path+"/c", env)
 	case "Prerendered":
 		if n, ok := v.Extra["nodes"].([]*RNode); ok {
@@ -521,7 +537,7 @@ func (r *Render) builtin(v *ViewV, path string, env *REnv) []*RNode {
 		} else if u, ok := v.Extra["url"]; ok {
 			n.P["url"] = describe(u)
 		} else if s, ok := v.arg(""); ok {
-			n.P["asset"] = describe(s)
+			n.P["asset"] = r.imageAssetName(s)
 		}
 		return []*RNode{n}
 	case "Label":
@@ -552,6 +568,16 @@ func (r *Render) builtin(v *ViewV, path string, env *REnv) []*RNode {
 		if sp, ok := v.arg("spacing"); ok && sp != nil {
 			f, _ := toFloat(sp)
 			n.P["sp"] = f
+		}
+		n.C = r.resolve(r.callBuilder(v.closure("content")), path+"/c", env)
+		return []*RNode{n}
+	case "Layout":
+		n := &RNode{T: "hstack", ID: path, P: map[string]interface{}{"wrap": true, "al": "top"}}
+		if layout, ok := v.Extra["layout"].(*StructV); ok {
+			if sp, ok := layout.F["spacing"]; ok && sp != nil {
+				f, _ := toFloat(sp)
+				n.P["sp"] = f
+			}
 		}
 		n.C = r.resolve(r.callBuilder(v.closure("content")), path+"/c", env)
 		return []*RNode{n}
@@ -676,6 +702,12 @@ func (r *Render) builtin(v *ViewV, path string, env *REnv) []*RNode {
 		n := &RNode{T: "button", ID: path, P: map[string]interface{}{"style": r.buttonStyleName(env), "ctx": env.ctx}}
 		lbl := r.labelFrom(v, path, env, "label")
 		if len(lbl) == 0 {
+			// `ShareLink(item: url) { Label(...) }` passes the label as a trailing closure.
+			if f := v.closure("content"); f != nil {
+				lbl = r.resolve(r.callBuilder(f), path+"/l", env)
+			}
+		}
+		if len(lbl) == 0 {
 			lbl = []*RNode{{T: "image", P: map[string]interface{}{"sys": "square.and.arrow.up"}}}
 		}
 		n.C = lbl
@@ -777,7 +809,9 @@ func (r *Render) builtin(v *ViewV, path string, env *REnv) []*RNode {
 		if s, ok := v.arg("systemImage"); ok {
 			n.P["sys"] = describe(s)
 		}
-		if d, ok := v.arg("description"); ok {
+		if f := v.closure("description"); f != nil {
+			n.P["desc"] = r.resolve(r.callBuilder(f), path+"/d", env)
+		} else if d, ok := v.arg("description"); ok {
 			n.P["desc"] = r.resolve(d, path+"/d", env)
 		}
 		if f := v.closure("label"); f != nil {
@@ -2059,6 +2093,9 @@ func (r *Render) navStack(v *ViewV, path string, env *REnv) *RNode {
 	for i, p := range pages {
 		pn := &RNode{T: "page", ID: fmt.Sprintf("%s/pg%d", key, i), P: map[string]interface{}{}, C: p.nodes}
 		pn.P["title"] = p.pc.title
+		if p.pc.subtitle != "" {
+			pn.P["subtitle"] = p.pc.subtitle
+		}
 		mode := p.pc.mode
 		if mode == "" || mode == "automatic" {
 			mode = "large"
@@ -2252,6 +2289,9 @@ func (r *Render) tabView(v *ViewV, path string, env *REnv) *RNode {
 			if val, ok := tv.arg("value"); ok {
 				ti.tag = val
 				ti.hasTag = true
+			}
+			if label, ok := tv.arg("label"); ok && ti.label == nil {
+				ti.label = label
 			}
 		}
 		tabs = append(tabs, ti)
@@ -2496,6 +2536,19 @@ func (r *Render) modifier(m *ModV, path string, env *REnv) []*RNode {
 			env.page.title = t
 			if dm, ok := argNamed(a, "displayMode"); ok {
 				env.page.mode = symName(dm)
+			}
+		}
+		return nodes
+	case "navigationSubtitle":
+		nodes := r.resolve(m.Base, path, env)
+		if env.page != nil {
+			switch x := a0.(type) {
+			case string:
+				env.page.subtitle = x
+			default:
+				if isTextValue(x) {
+					env.page.subtitle = plainText(r.resolve(x, path+"/subtitle", env))
+				}
 			}
 		}
 		return nodes

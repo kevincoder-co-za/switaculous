@@ -40,12 +40,13 @@ var viewLabels = map[string]string{
 	"Section":                "_ header footer content isExpanded",
 	"Form":                   "content",
 	"Group":                  "content",
+	"GlassEffectContainer":   "spacing content",
 	"NavigationStack":        "path root content",
 	"NavigationView":         "content",
 	"NavigationSplitView":    "sidebar content detail columnVisibility preferredCompactColumn",
 	"NavigationLink":         "_ destination label value isActive tag selection",
 	"TabView":                "selection content",
-	"Tab":                    "_ systemImage image value role content",
+	"Tab":                    "_ systemImage image value role content label",
 	"GroupBox":               "_ label content",
 	"DisclosureGroup":        "_ isExpanded content label",
 	"LabeledContent":         "_ value format content label",
@@ -86,6 +87,7 @@ var viewLabels = map[string]string{
 	"TextFieldLink":          "*",
 	"HelpLink":               "*",
 	"MultiDatePicker":        "*",
+	"Layout":                 "*",
 }
 
 var unsupportedViews = map[string]bool{
@@ -119,7 +121,7 @@ func init() {
 	Locale TimeZone Scanner State Binding StateObject ObservedObject Alert ActionSheet ToolbarItemPlacement UIScreen UIApplication
 	MainActor LocalizedStringKey AttributedString LocalizedStringResource Text.Case StrokeStyle CharacterSet NSNumber
 	UIImpactFeedbackGenerator UINotificationFeedbackGenerator ShapeStyle View Shape Material TextAlignment Visibility
-	ScenePhase ColorScheme ListStyle ButtonStyle PresentationDetent JSONDecoder JSONEncoder URLSession FileManager UserDefaults
+	ScenePhase ColorScheme ListStyle ButtonStyle PresentationDetent JSONDecoder JSONEncoder URLSession FileManager ImageRenderer UserDefaults
 	NotificationCenter Transaction ScrollViewProxy GeometryProxy Image.Scale Font.Weight Font.Design RoundedCornerStyle
 	ToolbarPlacement Comparable Equatable Hashable Identifiable Error CaseIterable Codable ObservableObject EnvironmentValues
 	SymbolRenderingMode KeyboardType UIKeyboardType TextInputAutocapitalization SubmitLabel DynamicTypeSize ControlSize Prominence
@@ -148,7 +150,7 @@ func init() {
 	listRowInsets listRowSeparator listRowSeparatorTint listSectionSeparator scrollContentBackground imageScale symbolRenderingMode
 	symbolVariant resizable renderingMode interpolation antialiased safeAreaInset badge buttonStyle textFieldStyle pickerStyle
 	toggleStyle labelStyle listStyle datePickerStyle progressViewStyle menuStyle tabViewStyle gaugeStyle groupBoxStyle
-	indexViewStyle controlSize labelsHidden environmentObject environment preferredColorScheme navigationTitle navigationBarTitle
+	indexViewStyle controlSize labelsHidden environmentObject environment preferredColorScheme navigationTitle navigationSubtitle navigationBarTitle
 	navigationBarTitleDisplayMode toolbar navigationBarItems navigationBarBackButtonHidden navigationBarHidden searchable
 	navigationDestination toolbarBackground toolbarColorScheme toolbarTitleDisplayMode tabItem tag sheet fullScreenCover
 	popover alert confirmationDialog actionSheet onAppear onDisappear task onChange onReceive refreshable onSubmit onDelete
@@ -344,7 +346,45 @@ func (ip *Interp) namedColor(name string) *ColorV {
 	if namedColors[name] {
 		return &ColorV{Name: name, Op: 1}
 	}
+	if asset := ip.assetColorForSymbol(name); asset != "" {
+		return &ColorV{Name: assetColorName(asset), Op: 1}
+	}
 	return nil
+}
+
+// Xcode generates `Color.brandGreen` for a "BrandGreen" color set: the symbol
+// is the asset name with a lowercase first letter and punctuation removed.
+func (ip *Interp) assetColorForSymbol(symbol string) string {
+	if ip.rt == nil {
+		return ""
+	}
+	for asset := range ip.rt.colorAssets {
+		if assetSymbolName(asset) == symbol {
+			return asset
+		}
+	}
+	return ""
+}
+
+func assetSymbolName(asset string) string {
+	var out strings.Builder
+	upperNext := false
+	for i, r := range asset {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) {
+			upperNext = true
+			continue
+		}
+		switch {
+		case i == 0:
+			out.WriteRune(unicode.ToLower(r))
+		case upperNext:
+			out.WriteRune(unicode.ToUpper(r))
+		default:
+			out.WriteRune(r)
+		}
+		upperNext = false
+	}
+	return out.String()
 }
 
 func (ip *Interp) colorFromSym(s *SymV) Value {
