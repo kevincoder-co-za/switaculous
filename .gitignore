@@ -1,0 +1,4 @@
+*.exe
+*.deb
+.rpm
+dist/
