@@ -101,6 +101,9 @@ type ConsoleLine struct {
 	T    string `json:"t"`
 	Kind string `json:"k"`
 	Msg  string `json:"m"`
+	Path string `json:"path,omitempty"`
+	Line int    `json:"line,omitempty"`
+	Col  int    `json:"col,omitempty"`
 }
 
 type PreviewRef struct {
@@ -167,12 +170,27 @@ func NewRuntime(dir string) *Runtime {
 }
 
 func (rt *Runtime) logf(kind, f string, a ...interface{}) {
-	msg := fmt.Sprintf(f, a...)
-	rt.console = append(rt.console, ConsoleLine{T: time.Now().Format("15:04:05"), Kind: kind, Msg: msg})
+	rt.appendConsole(ConsoleLine{Kind: kind, Msg: fmt.Sprintf(f, a...)})
+}
+
+// Error lines carry where the error is so the console can show the location
+// and open the file at that line when clicked.
+func (rt *Runtime) logError(prefix string, e ErrInfo) {
+	line := ConsoleLine{Kind: "error", Msg: prefix + e.Msg, Path: e.Path, Line: e.Line, Col: e.Col}
+	if e.File != "" && e.Line > 0 {
+		line.Msg = fmt.Sprintf("%s%s:%d:%d: %s", prefix, e.File, e.Line, e.Col, e.Msg)
+	}
+	rt.appendConsole(line)
+}
+
+func (rt *Runtime) appendConsole(line ConsoleLine) {
+	line.T = time.Now().Format("15:04:05")
+	msg := line.Msg
+	rt.console = append(rt.console, line)
 	if len(rt.console) > 300 {
 		rt.console = rt.console[len(rt.console)-300:]
 	}
-	if kind == "print" {
+	if line.Kind == "print" {
 		fmt.Fprintln(consoleOutput, msg)
 	}
 }
@@ -411,7 +429,7 @@ func (rt *Runtime) reloadLocked() {
 		files[path] = stmts
 	}
 	if len(rt.errs) > 0 {
-		rt.logf("error", "Build failed: %s", rt.errs[0].Msg)
+		rt.logError("Build failed: ", rt.errs[0])
 		rt.broadcastLocked(nil)
 		return
 	}
@@ -434,7 +452,7 @@ func (rt *Runtime) reloadLocked() {
 		} else {
 			rt.errs = append(rt.errs, ErrInfo{Msg: err.Error(), Kind: "compile"})
 		}
-		rt.logf("error", "Build failed: %s", rt.errs[0].Msg)
+		rt.logError("Build failed: ", rt.errs[0])
 		rt.broadcastLocked(nil)
 		return
 	}
@@ -567,16 +585,21 @@ func (rt *Runtime) catch(f func()) (failed bool) {
 			failed = true
 			switch e := r.(type) {
 			case *RuntimeError:
-				rt.errs = append(rt.errs, rt.errInfo(e.Pos, e.Msg, "runtime"))
-				rt.logf("error", "%s: %s", e.Pos, e.Msg)
+				info := rt.errInfo(e.Pos, e.Msg, "runtime")
+				rt.errs = append(rt.errs, info)
+				rt.logError("", info)
 			case *ThrowSignal:
-				rt.errs = append(rt.errs, rt.errInfo(e.Pos, "Uncaught error thrown: "+describe(e.V), "runtime"))
+				info := rt.errInfo(e.Pos, "Uncaught error thrown: "+describe(e.V), "runtime")
+				rt.errs = append(rt.errs, info)
+				rt.logError("", info)
 			case *OptNilSignal:
 				rt.errs = append(rt.errs, ErrInfo{Msg: "optional chaining on nil", Kind: "runtime"})
 			case *abortSignal:
 				failed = false
 			case *SwiftError:
-				rt.errs = append(rt.errs, rt.errInfo(e.Pos, e.Msg, "runtime"))
+				info := rt.errInfo(e.Pos, e.Msg, "runtime")
+				rt.errs = append(rt.errs, info)
+				rt.logError("", info)
 			default:
 				rt.errs = append(rt.errs, ErrInfo{Msg: fmt.Sprintf("internal error: %v", r), Kind: "runtime"})
 				fmt.Fprintf(os.Stderr, "internal error: %v\n", r)

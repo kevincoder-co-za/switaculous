@@ -21,9 +21,10 @@ import (
 const serverInfoFile = "server.json"
 
 type runningServerInfo struct {
-	Port int    `json:"port"`
-	Dir  string `json:"dir"`
-	PID  int    `json:"pid"`
+	Port  int    `json:"port"`
+	Dir   string `json:"dir"`
+	PID   int    `json:"pid"`
+	Build string `json:"build"`
 }
 
 func serverInfoPath() string {
@@ -40,7 +41,7 @@ func writeServerInfo(port int, dir string) {
 		return
 	}
 	os.MkdirAll(filepath.Dir(path), 0755)
-	content, _ := json.Marshal(runningServerInfo{Port: port, Dir: dir, PID: os.Getpid()})
+	content, _ := json.Marshal(runningServerInfo{Port: port, Dir: dir, PID: os.Getpid(), Build: currentBuildID()})
 	os.WriteFile(path, content, 0644)
 }
 
@@ -113,6 +114,9 @@ var mcpTools = []mcpTool{
 
 func runMCPServer(projectDir string, port int, noOpen bool) {
 	info, running := readServerInfo()
+	if running && stopOutdatedInstance(info) {
+		running = false
+	}
 	baseURL := ""
 	if running && (projectDir == "" || sameFolder(info.Dir, projectDir)) {
 		baseURL = fmt.Sprintf("http://127.0.0.1:%d", info.Port)

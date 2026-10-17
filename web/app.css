@@ -65,6 +65,8 @@ body {
 :root[data-theme="dark"] #console .ln.warn { color: #e6c35c; }
 #console .ln.error { color: var(--chrome-err); }
 #console .ln.info { color: var(--chrome-sub); }
+#console .ln.jump { cursor: pointer; }
+#console .ln.jump:hover { text-decoration: underline; }
 #device-wrap { position: relative; transform-origin: center center; }
 #errorbox {
   position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); width: min(620px, calc(100% - 36px));
@@ -75,6 +77,7 @@ body {
 #errorbox .kind { font-weight: 650; color: var(--chrome-err); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
 #errorbox .msg { font-size: 14px; margin: 4px 0 8px; font-weight: 500; }
 #errorbox .loc { color: var(--chrome-sub); font-size: 12px; }
+#errorbox .loc .go { margin-left: 10px; color: var(--chrome-accent, #0a84ff); font-weight: 600; }
 #errorbox pre { margin: 8px 0 0; font: 12px/1.45 ui-monospace, "SF Mono", Menlo, Consolas, monospace; background: var(--chrome-bg); padding: 8px 10px; border-radius: 6px; overflow: auto; }
 #stage.stale #device-wrap { opacity: .55; filter: grayscale(.4); transition: opacity .2s; }
 #disconnected { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); background: var(--chrome-err); color: #fff; padding: 6px 12px; border-radius: 8px; font-weight: 600; display: none; z-index: 60; }

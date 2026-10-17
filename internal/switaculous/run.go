@@ -88,7 +88,7 @@ func switaculousDocumentsFolder() string {
 // running shows the open editor instead of starting a second copy.
 func showRunningInstance(projectDir string, noOpen bool) bool {
 	info, running := readServerInfo()
-	if !running {
+	if !running || stopOutdatedInstance(info) {
 		return false
 	}
 	url := fmt.Sprintf("http://127.0.0.1:%d/", info.Port)

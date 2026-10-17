@@ -742,6 +742,7 @@
 
   // The asset and icon panels live in library.js and use these to talk to the editor.
   window.SwitaculousEditor = {
+    jumpTo: jumpToError,
     postJSON,
     showToast,
     askToConfirm,

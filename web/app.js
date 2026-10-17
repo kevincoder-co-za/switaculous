@@ -108,6 +108,12 @@
       const d = mk('div', 'ln ' + l.k);
       const t = mk('span', 't'); t.textContent = l.t;
       d.appendChild(t); d.appendChild(document.createTextNode(l.m));
+      const editor = window.SwitaculousEditor;
+      if (l.path && l.line && editor && editor.jumpTo) {
+        d.classList.add('jump');
+        d.title = 'Open ' + l.path + ' at line ' + l.line;
+        d.addEventListener('click', () => editor.jumpTo({ path: l.path, line: l.line, col: l.col || 1 }));
+      }
       c.appendChild(d);
     }
     if (atBottom) c.scrollTop = c.scrollHeight;
@@ -123,7 +129,12 @@
     const k = mk('div', 'kind'); k.textContent = e.kind === 'compile' ? 'Build failed' : 'Runtime error';
     const m = mk('div', 'msg'); m.textContent = e.msg;
     box.append(k, m);
-    if (e.file) { const l = mk('div', 'loc'); l.textContent = `${e.file}:${e.line}:${e.col}` + (errs.length > 1 ? `  ·  ${errs.length - 1} more` : ''); box.appendChild(l); }
+    if (e.file) {
+      const l = mk('div', 'loc');
+      l.textContent = `${e.file}:${e.line}:${e.col}` + (errs.length > 1 ? `  ·  ${errs.length - 1} more` : '');
+      if (window.SwitaculousEditor && e.path) { const go = mk('span', 'go'); go.textContent = 'Show in editor ›'; l.appendChild(go); }
+      box.appendChild(l);
+    }
     if (e.snippet) { const pre = mk('pre'); pre.textContent = e.snippet; box.appendChild(pre); }
     box.classList.add('show');
   }
