@@ -1,0 +1,10 @@
+github.com/golang/sys v0.37.0 h1:4erYIPZJGUahPd9mfpzZTlgCXzND5KtX7Ja9xHdB+Xs=
+github.com/golang/sys v0.37.0/go.mod h1:OgkHotnGiDImocRcuBABYBEXf8A9a87e/uXjp9XT3ks=
+github.com/ncruces/go-sqlite3 v0.30.5 h1:6usmTQ6khriL8oWilkAZSJM/AIpAlVL2zFrlcpDldCE=
+github.com/ncruces/go-sqlite3 v0.30.5/go.mod h1:0I0JFflTKzfs3Ogfv8erP7CCoV/Z8uxigVDNOR0AQ5E=
+github.com/ncruces/julianday v1.0.0 h1:fH0OKwa7NWvniGQtxdJRxAgkBMolni2BjDHaWTxqt7M=
+github.com/ncruces/julianday v1.0.0/go.mod h1:Dusn2KvZrrovOMJuOt0TNXL6tB7U2E8kvza5fFc9G7g=
+github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e h1:MRM5ITcdelLK2j1vwZ3Je0FKVCfqOLp5zO6trqMLYs0=
+github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e/go.mod h1:XV66xRDqSt+GTGFMVlhk3ULuV0y9ZmzeVGR4mloJI3M=
+github.com/tetratelabs/wazero v1.11.0 h1:+gKemEuKCTevU4d7ZTzlsvgd1uaToIDtlQlmNbwqYhA=
+github.com/tetratelabs/wazero v1.11.0/go.mod h1:eV28rsN8Q+xwjogd7f4/Pp4xFxO7uOGbLcD/LzB1wiU=
