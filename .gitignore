@@ -3,3 +3,6 @@
 .rpm
 dist/
 rsrc_windows_amd64.syso
+
+# SQLite stores the preview writes when a demo uses SwiftData.
+examples/*/.swiftdata/

@@ -119,15 +119,17 @@ type ticker struct {
 }
 
 type Runtime struct {
-	mu           sync.Mutex
-	dir          string
-	store        *Store
-	ip           *Interp
-	gen          int
-	files        map[string]string
-	sources      map[string]string
-	lastEdited   string
-	pinned       string
+	mu         sync.Mutex
+	dir        string
+	store      *Store
+	ip         *Interp
+	gen        int
+	files      map[string]string
+	sources    map[string]string
+	lastEdited string
+	pinned     string
+	// Shows the welcome screen until a project is picked or it is closed.
+	welcome      bool
 	clients      map[chan []byte]bool
 	cmu          sync.Mutex
 	lastPayload  []byte

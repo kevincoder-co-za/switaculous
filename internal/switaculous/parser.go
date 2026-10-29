@@ -716,6 +716,25 @@ func (p *Parser) skipAngles() {
 	}
 }
 
+// Reads the "Name == Type" requirements of a where clause on an extension.
+func (p *Parser) parseWhereSameTypes() map[string]*TypeRef {
+	if !p.isKw("where") {
+		return nil
+	}
+	p.next()
+	result := map[string]*TypeRef{}
+	for !p.isP("{") && p.t().K != tEOF {
+		if p.t().K == tIdent && p.peek(1).K == tOp && p.peek(1).S == "==" {
+			name := p.next().S
+			p.next()
+			result[name] = p.parseType()
+			continue
+		}
+		p.next()
+	}
+	return result
+}
+
 func (p *Parser) skipWhere() {
 	if p.isKw("where") {
 		for !p.isP("{") && p.t().K != tEOF {
@@ -819,6 +838,7 @@ func (p *Parser) parseTypeDecl(attrs []*Attr, mods map[string]bool) Stmt {
 	d := &TypeDecl{Pos: kw.Pos, Kind: kind, Attrs: attrs, Mods: mods}
 	if kind == "extension" {
 		ty := p.parseType()
+		d.Target = ty
 		d.Name = ty.Name
 		if ty.Kind == tyArray {
 			d.Name = "Array"
@@ -827,7 +847,7 @@ func (p *Parser) parseTypeDecl(attrs []*Attr, mods map[string]bool) Stmt {
 		}
 	} else {
 		d.Name = p.expectIdent()
-		p.skipAngles()
+		d.Generics = p.parseGenericParamNames()
 	}
 	if p.isP(":") {
 		p.next()
@@ -845,7 +865,7 @@ func (p *Parser) parseTypeDecl(attrs []*Attr, mods map[string]bool) Stmt {
 			break
 		}
 	}
-	p.skipWhere()
+	d.SameType = p.parseWhereSameTypes()
 	p.expectP("{")
 	saved := p.noTrail
 	p.noTrail = 0

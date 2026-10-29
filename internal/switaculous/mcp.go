@@ -146,10 +146,13 @@ func sameFolder(a, b string) bool {
 // itself (and opens the browser), so the assistant still has a live project.
 func startEmbeddedServer(projectDir string, port int, noOpen bool) string {
 	if projectDir == "" {
-		projectDir = "MyApp"
+		projectDir = defaultProjectFolder()
+	}
+	if projectDir == "" {
+		projectDir = filepath.Join(switaculousDocumentsFolder(), "HelloWorld")
 	}
 	ready := make(chan string, 1)
-	go serveProject(projectDir, port, noOpen, true, ready)
+	go serveProject(projectDir, port, noOpen, true, false, ready)
 	return <-ready
 }
 

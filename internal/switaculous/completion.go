@@ -10,11 +10,12 @@ import (
 )
 
 type completionItem struct {
-	Text   string `json:"text"`
-	Insert string `json:"insert"`
-	Detail string `json:"detail"`
-	Doc    string `json:"doc"`
-	Kind   string `json:"kind"`
+	Text    string `json:"text"`
+	Insert  string `json:"insert"`
+	Detail  string `json:"detail"`
+	Doc     string `json:"doc"`
+	Example string `json:"example,omitempty"`
+	Kind    string `json:"kind"`
 }
 
 type completionRequest struct {
@@ -260,6 +261,16 @@ func (c *completer) complete() completionResponse {
 	}
 	if strings.HasSuffix(head, ".") {
 		receiver := receiverExpression(head[:len(head)-1])
+		if receiver == "" && strings.TrimSpace(head) == "." {
+			if chain, ok := c.chainAbove(); ok {
+				if chain == "" {
+					c.membersOf(typeGuess{name: "View", isView: true})
+				} else {
+					c.membersOf(c.resolveChain(chain))
+				}
+				return c.finish("member", prefix)
+			}
+		}
 		if receiver == "" {
 			c.implicitMembers(head[:len(head)-1])
 			return c.finish("implicit", prefix)
@@ -323,6 +334,53 @@ func insideStringLiteral(head string) bool {
 	return inString
 }
 
+// A line starting with "." usually carries on the expression above it, as in
+// a SwiftUI modifier chain. Returns that expression, or "" when it ends with
+// the closing brace of a view such as VStack { … }. Not ok when the line above
+// leaves an argument or value to come, so ".red" there is an implicit member.
+func (c *completer) chainAbove() (string, bool) {
+	var parts []string
+	for i := c.line - 1; i >= 0; i-- {
+		text := strings.TrimSpace(c.lines[i])
+		if j := strings.Index(text, " //"); j >= 0 && strings.Count(text[:j], `"`)%2 == 0 {
+			text = strings.TrimSpace(text[:j])
+		}
+		if text == "" || strings.HasPrefix(text, "//") {
+			continue
+		}
+		if len(parts) == 0 && expectsMore(text) {
+			return "", false
+		}
+		parts = append([]string{text}, parts...)
+		if !strings.HasPrefix(text, ".") {
+			break
+		}
+	}
+	if len(parts) == 0 {
+		return "", false
+	}
+	if strings.HasPrefix(parts[0], "}") || strings.HasPrefix(parts[0], ")") {
+		return "", true
+	}
+	receiver := receiverExpression(strings.Join(parts, ""))
+	if strings.HasPrefix(receiver, ".") {
+		return "", true
+	}
+	return receiver, true
+}
+
+func expectsMore(text string) bool {
+	if strings.ContainsAny(text[len(text)-1:], ",([{=:?") {
+		return true
+	}
+	for _, word := range []string{"in", "return", "else", "case"} {
+		if text == word || strings.HasSuffix(text, " "+word) {
+			return true
+		}
+	}
+	return false
+}
+
 // The expression that ends right before a dot: `item.name`, `items[0]`, `Text("hi").bold()`.
 func receiverExpression(head string) string {
 	end := len(head)
@@ -361,6 +419,15 @@ func (c *completer) add(kind, text, insert, detail, doc string) {
 		insert = text
 	}
 	c.items = append(c.items, completionItem{Text: text, Insert: insert, Detail: detail, Doc: doc, Kind: kind})
+}
+
+// Adds a documented API, carrying its usage example along.
+func (c *completer) addDoc(kind, text, insert string, doc apiDoc) {
+	count := len(c.items)
+	c.add(kind, text, insert, doc.Signature, doc.Summary)
+	if len(c.items) > count {
+		c.items[count].Example = doc.Example
+	}
 }
 
 // The cursor marker; the editor puts the caret there after inserting.
@@ -403,7 +470,7 @@ func (c *completer) addNames(kind string, names []string, detail string) {
 func (c *completer) addModifiers() {
 	for name, docs := range modifierDocs {
 		for _, doc := range docs {
-			c.add("modifier", name, insertFromDocSignature(doc.Signature), doc.Signature, doc.Summary)
+			c.addDoc("modifier", name, insertFromDocSignature(doc.Signature), doc)
 		}
 	}
 	for name := range knownModifiers {
@@ -434,16 +501,37 @@ func insertFromDocSignature(signature string) string {
 		}
 		label := strings.Fields(strings.SplitN(param, ":", 2)[0])[0]
 		switch {
+		case strings.Contains(param, ") ->") && label == "_":
+			parts = append(parts, emptyClosure)
+		case strings.Contains(param, ") ->"):
+			parts = append(parts, label+": "+emptyClosure)
 		case label == "_":
 			parts = append(parts, "")
-		case strings.Contains(param, ") ->"):
-			parts = append(parts, label+": { ")
 		default:
 			parts = append(parts, label+": ")
 		}
 	}
-	insert := signature[:open] + "(" + withCursorInFirstPart(parts) + ")"
-	return strings.Replace(insert, "{ "+cursorMarker, "{ "+cursorMarker+" }", 1)
+	return callInsert(signature[:open], parts)
+}
+
+const emptyClosure = "{ }"
+
+// Builds "name(a: |, b: )" with the caret in the first argument. A closure in
+// the last place becomes a trailing closure: "sheet(isPresented: |) { }".
+func callInsert(name string, parts []string) string {
+	trailing := ""
+	if n := len(parts); n > 0 && strings.HasSuffix(parts[n-1], emptyClosure) {
+		parts = parts[:n-1]
+		trailing = " " + emptyClosure
+	}
+	if len(parts) == 0 && trailing != "" {
+		return name + " { " + cursorMarker + " }"
+	}
+	if len(parts) > 0 && strings.HasSuffix(parts[0], emptyClosure) {
+		parts[0] = strings.TrimSuffix(parts[0], "}") + cursorMarker + " }"
+		return name + "(" + strings.Join(parts, ", ") + ")" + trailing
+	}
+	return name + "(" + withCursorInFirstPart(parts) + ")" + trailing
 }
 
 func splitTopLevel(text string) []string {
@@ -451,12 +539,14 @@ func splitTopLevel(text string) []string {
 	depth := 0
 	start := 0
 	for i, r := range text {
-		switch r {
-		case '(', '<', '[':
+		switch {
+		case r == '(' || r == '<' || r == '[':
 			depth++
-		case ')', '>', ']':
+		case r == '>' && i > 0 && text[i-1] == '-':
+			// The arrow of a closure type, not the end of a generic.
+		case r == ')' || r == '>' || r == ']':
 			depth--
-		case ',':
+		case r == ',':
 			if depth == 0 {
 				parts = append(parts, strings.TrimSpace(text[start:i]))
 				start = i + 1
@@ -497,16 +587,17 @@ func insertFromParams(name string, params []*Param) string {
 			continue
 		}
 		switch {
+		case p.Type != nil && p.Type.Kind == tyFunc && p.Label == "":
+			parts = append(parts, emptyClosure)
+		case p.Type != nil && p.Type.Kind == tyFunc:
+			parts = append(parts, p.Label+": "+emptyClosure)
 		case p.Label == "":
 			parts = append(parts, "")
-		case p.Type != nil && p.Type.Kind == tyFunc:
-			parts = append(parts, p.Label+": { ")
 		default:
 			parts = append(parts, p.Label+": ")
 		}
 	}
-	insert := name + "(" + withCursorInFirstPart(parts) + ")"
-	return strings.Replace(insert, "{ "+cursorMarker, "{ "+cursorMarker+" }", 1)
+	return callInsert(name, parts)
 }
 
 // ---------- identifier context ----------
@@ -520,7 +611,7 @@ func (c *completer) identifiers() {
 	}
 	for name, docs := range viewDocs {
 		for _, doc := range docs {
-			c.add("view", name, insertFromDocSignature(doc.Signature), doc.Signature, doc.Summary)
+			c.addDoc("view", name, insertFromDocSignature(doc.Signature), doc)
 		}
 	}
 	for name := range viewLabels {
@@ -1072,7 +1163,7 @@ func (c *completer) membersOf(guess typeGuess) {
 		}
 		if guess.info == nil && isViewType(guess.name) {
 			for _, doc := range viewDocs[guess.name] {
-				c.add("static", "init", insertFromDocSignature(strings.Replace(doc.Signature, guess.name, "init", 1)), doc.Signature, doc.Summary)
+				c.addDoc("static", "init", insertFromDocSignature(strings.Replace(doc.Signature, guess.name, "init", 1)), doc)
 			}
 		}
 		if guess.info == nil && c.ip != nil {
@@ -1183,5 +1274,5 @@ func (c *completer) nestedTypes(ti *TypeInfo) map[string]*TypeInfo {
 }
 
 func (rt *Runtime) handleDocs(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, map[string]map[string][]apiDoc{"modifiers": modifierDocs, "views": viewDocs})
+	writeJSON(w, map[string]interface{}{"modifiers": modifierDocs, "views": viewDocs, "types": typeDocs})
 }

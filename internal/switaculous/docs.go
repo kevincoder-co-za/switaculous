@@ -1,19 +1,24 @@
 package switaculous
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
 
 type apiDoc struct {
 	Signature string `json:"sig"`
 	Summary   string `json:"doc"`
+	Example   string `json:"example,omitempty"`
 }
 
 // Signatures are written the way Xcode's completion shows them; the part after
-// " — " is the one-line description.
+// " — " is the one-line description. An optional third part is a usage example;
+// without one, an example is written from the parameter types.
 var modifierDocs = parseDocLines(`
-padding(_ edges: Edge.Set = .all, _ length: CGFloat? = nil) — Adds space around the view; padding() uses the system amount
+padding(_ edges: Edge.Set = .all, _ length: CGFloat? = nil) — Adds space around the view; padding() uses the system amount — .padding(.horizontal, 16)
 padding(_ length: CGFloat) — Adds the same space on all four sides
-frame(width: CGFloat? = nil, height: CGFloat? = nil, alignment: Alignment = .center) — Fixes the view's size
-frame(maxWidth: CGFloat? = nil, maxHeight: CGFloat? = nil, alignment: Alignment = .center) — Lets the view grow up to a size; .infinity fills the parent
+frame(width: CGFloat? = nil, height: CGFloat? = nil, alignment: Alignment = .center) — Fixes the view's size — .frame(width: 200, height: 100)
+frame(maxWidth: CGFloat? = nil, maxHeight: CGFloat? = nil, alignment: Alignment = .center) — Lets the view grow up to a size; .infinity fills the parent — .frame(maxWidth: .infinity, alignment: .leading)
 font(_ font: Font?) — Sets the text font, for example .title or .system(size: 20)
 fontWeight(_ weight: Font.Weight?) — Sets the weight, for example .bold or .semibold
 fontDesign(_ design: Font.Design?) — Uses .rounded, .serif or .monospaced lettering
@@ -24,14 +29,14 @@ strikethrough(_ isActive: Bool = true, color: Color? = nil) — Draws a line thr
 foregroundStyle(_ style: ShapeStyle) — Colours text and symbols, for example .secondary or .red
 foregroundColor(_ color: Color?) — Older name for foregroundStyle
 background(_ style: ShapeStyle, in shape: Shape? = nil) — Paints a colour or gradient behind the view
-background(alignment: Alignment = .center, content: () -> View) — Places another view behind this one
+background(alignment: Alignment = .center, content: () -> View) — Places another view behind this one — .background { RoundedRectangle(cornerRadius: 12).fill(.yellow) }
 overlay(alignment: Alignment = .center, content: () -> View) — Places another view on top of this one
 tint(_ tint: Color?) — Sets the accent colour used by buttons and controls
 opacity(_ opacity: Double) — Makes the view translucent (0 hidden, 1 fully visible)
 cornerRadius(_ radius: CGFloat) — Rounds the corners (older than clipShape)
 clipShape(_ shape: Shape) — Clips the view to a shape, for example .rect(cornerRadius: 12) or Circle()
 clipped() — Cuts off anything drawn outside the view's frame
-shadow(color: Color = .black.opacity(0.33), radius: CGFloat, x: CGFloat = 0, y: CGFloat = 0) — Adds a drop shadow
+shadow(color: Color = .black.opacity(0.33), radius: CGFloat, x: CGFloat = 0, y: CGFloat = 0) — Adds a drop shadow — .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
 border(_ style: ShapeStyle, width: CGFloat = 1) — Draws a border around the view's frame
 offset(x: CGFloat = 0, y: CGFloat = 0) — Moves the view without affecting layout
 position(x: CGFloat, y: CGFloat) — Places the view's centre at a point in its parent
@@ -55,7 +60,7 @@ kerning(_ kerning: CGFloat) — Adjusts the space between letters
 navigationTitle(_ title: String) — Sets the title shown in the navigation bar
 navigationBarTitleDisplayMode(_ displayMode: NavigationBarItem.TitleDisplayMode) — .large, .inline or .automatic title
 navigationBarBackButtonHidden(_ hidesBackButton: Bool = true) — Hides the back button
-navigationDestination(for data: Data.Type, destination: (Data) -> View) — The view to push for NavigationLink(value:) of this type
+navigationDestination(for data: Data.Type, destination: (Data) -> View) — The view to push for NavigationLink(value:) of this type — .navigationDestination(for: Recipe.self) { recipe in RecipeDetail(recipe: recipe) }
 navigationDestination(isPresented: Binding<Bool>, destination: () -> View) — Pushes a view when the binding is true
 toolbar(content: () -> ToolbarContent) — Adds items to the navigation bar; use ToolbarItem(placement:)
 toolbarBackground(_ style: ShapeStyle, for bars: ToolbarPlacement...) — Colours the navigation or tab bar
@@ -69,9 +74,9 @@ listStyle(_ style: ListStyle) — .plain, .inset, .grouped, .insetGrouped or .si
 listRowBackground(_ view: View?) — Background of this list row
 listRowSeparator(_ visibility: Visibility, edges: VerticalEdge.Set = .all) — Hides or shows the row's separator
 listRowInsets(_ insets: EdgeInsets?) — Changes the padding inside the row
-swipeActions(edge: HorizontalEdge = .trailing, allowsFullSwipe: Bool = true, content: () -> View) — Buttons revealed by swiping the row
-onDelete(perform action: ((IndexSet) -> Void)?) — Lets rows of a ForEach be deleted by swiping
-onMove(perform action: ((IndexSet, Int) -> Void)?) — Lets rows be reordered in edit mode
+swipeActions(edge: HorizontalEdge = .trailing, allowsFullSwipe: Bool = true, content: () -> View) — Buttons revealed by swiping the row — .swipeActions { Button("Delete", role: .destructive) { delete(item) } }
+onDelete(perform action: ((IndexSet) -> Void)?) — Lets rows of a ForEach be deleted by swiping — .onDelete { offsets in items.remove(atOffsets: offsets) }
+onMove(perform action: ((IndexSet, Int) -> Void)?) — Lets rows be reordered in edit mode — .onMove { from, to in items.move(fromOffsets: from, toOffset: to) }
 scrollContentBackground(_ visibility: Visibility) — .hidden removes the default List or Form background
 scrollIndicators(_ visibility: ScrollIndicatorVisibility) — Shows or hides scroll bars
 scrollDismissesKeyboard(_ mode: ScrollDismissesKeyboardMode) — Dismisses the keyboard while scrolling
@@ -106,24 +111,24 @@ simultaneousGesture(_ gesture: Gesture) — A gesture that runs alongside the vi
 onAppear(perform action: (() -> Void)? = nil) — Runs when the view is shown
 onDisappear(perform action: (() -> Void)? = nil) — Runs when the view is removed
 task(priority: TaskPriority = .userInitiated, _ action: () async -> Void) — Runs async work when the view appears and cancels it when it disappears
-onChange(of value: Equatable, initial: Bool = false, _ action: (oldValue, newValue) -> Void) — Runs when a value changes
+onChange(of value: Equatable, initial: Bool = false, _ action: (oldValue, newValue) -> Void) — Runs when a value changes — .onChange(of: searchText) { oldValue, newValue in print(newValue) }
 onReceive(_ publisher: Publisher, perform action: (Output) -> Void) — Runs when a timer or publisher fires
 animation(_ animation: Animation?, value: Equatable) — Animates changes whenever the value changes
 transition(_ t: AnyTransition) — How the view appears and disappears, for example .slide or .scale
 contentTransition(_ transition: ContentTransition) — Animates text changes with .numericText()
 matchedGeometryEffect(id: Hashable, in namespace: Namespace.ID) — Animates a view between two places
 sheet(isPresented: Binding<Bool>, onDismiss: (() -> Void)? = nil, content: () -> View) — Presents a sheet when the binding is true
-sheet(item: Binding<Item?>, content: (Item) -> View) — Presents a sheet for a non-nil item
+sheet(item: Binding<Item?>, content: (Item) -> View) — Presents a sheet for a non-nil item — .sheet(item: $selectedItem) { item in DetailView(item: item) }
 fullScreenCover(isPresented: Binding<Bool>, content: () -> View) — Presents a full-screen view
 popover(isPresented: Binding<Bool>, content: () -> View) — Presents a popover (a sheet on iPhone)
-alert(_ title: String, isPresented: Binding<Bool>, actions: () -> View, message: () -> View) — Shows an alert with buttons
+alert(_ title: String, isPresented: Binding<Bool>, actions: () -> View, message: () -> View) — Shows an alert with buttons — .alert("Delete?", isPresented: $showAlert) { Button("Delete", role: .destructive) { } } message: { Text("This can't be undone.") }
 confirmationDialog(_ title: String, isPresented: Binding<Bool>, titleVisibility: Visibility = .automatic, actions: () -> View) — Shows an action sheet from the bottom
 presentationDetents(_ detents: Set<PresentationDetent>) — Sheet heights: [.medium, .large, .height(300)]
 presentationDragIndicator(_ visibility: Visibility) — Shows the grab handle on a sheet
 interactiveDismissDisabled(_ isDisabled: Bool = true) — Stops a sheet from being swiped away
 contextMenu(menuItems: () -> View) — Menu shown on a long press
 environment(_ object: Observable) — Shares an @Observable object with child views
-environment(_ keyPath: WritableKeyPath<EnvironmentValues, V>, _ value: V) — Sets an environment value, for example \.colorScheme
+environment(_ keyPath: WritableKeyPath<EnvironmentValues, V>, _ value: V) — Sets an environment value, for example \.colorScheme — .environment(\.colorScheme, .dark)
 environmentObject(_ object: ObservableObject) — Shares an ObservableObject with child views
 modelContainer(for modelType: PersistentModel.Type, inMemory: Bool = false) — Gives the view tree a SwiftData store
 modelContainer(_ container: ModelContainer) — Uses an existing SwiftData container
@@ -161,13 +166,13 @@ GridItem(_ size: GridItem.Size = .flexible(), spacing: CGFloat? = nil) — A col
 Spacer(minLength: CGFloat? = nil) — Flexible empty space that pushes views apart
 Divider() — A thin separator line
 ScrollView(_ axes: Axis.Set = .vertical, showsIndicators: Bool = true, content: () -> View) — Makes its content scrollable
-ScrollViewReader(content: (ScrollViewProxy) -> View) — Lets you call proxy.scrollTo(id)
+ScrollViewReader(content: (ScrollViewProxy) -> View) — Lets you call proxy.scrollTo(id) — ScrollViewReader { proxy in Button("Top") { proxy.scrollTo(0) } }
 List(content: () -> View) — A scrolling list with system row styling
 List(_ data: [Identifiable], content: (Element) -> View) — A list built from a collection
 Form(content: () -> View) — A grouped list for settings and data entry
 Section(_ header: String, content: () -> View) — Groups rows in a List or Form
 ForEach(_ data: [Identifiable], content: (Element) -> View) — Creates a view for every element
-ForEach(_ data: Range<Int>, id: KeyPath, content: (Element) -> View) — Creates views for each value in a range
+ForEach(_ data: Range<Int>, id: KeyPath, content: (Element) -> View) — Creates views for each value in a range — ForEach(0..<5, id: \.self) { index in Text("Row \(index)") }
 Group(content: () -> View) — Groups views without affecting layout
 NavigationStack(content: () -> View) — A navigation bar with push and pop
 NavigationStack(path: Binding<NavigationPath>, content: () -> View) — A navigation stack you can control from code
@@ -198,9 +203,9 @@ GroupBox(_ title: String, content: () -> View) — Content in a rounded box with
 DisclosureGroup(_ title: String, isExpanded: Binding<Bool>, content: () -> View) — Collapsible content
 LabeledContent(_ title: String, value: String) — A label on the left and a value on the right
 ContentUnavailableView(_ title: String, systemImage: String, description: Text? = nil) — The standard empty-state screen
-GeometryReader(content: (GeometryProxy) -> View) — Reads the size you have been given
+GeometryReader(content: (GeometryProxy) -> View) — Reads the size you have been given — GeometryReader { proxy in Text("Width: \(proxy.size.width)") }
 AsyncImage(url: URL?) — Loads an image from a URL
-TimelineView(_ schedule: TimelineSchedule, content: (Context) -> View) — Redraws on a schedule, for clocks
+TimelineView(_ schedule: TimelineSchedule, content: (Context) -> View) — Redraws on a schedule, for clocks — TimelineView(.everyMinute) { context in Text(context.date, style: .time) }
 Rectangle() — A rectangle shape
 RoundedRectangle(cornerRadius: CGFloat, style: RoundedCornerStyle = .continuous) — A rectangle with rounded corners
 Circle() — A circle shape
@@ -226,12 +231,261 @@ func parseDocLines(text string) map[string][]apiDoc {
 		if line == "" {
 			continue
 		}
-		signature, summary, _ := strings.Cut(line, " — ")
+		signature, rest, _ := strings.Cut(line, " — ")
+		summary, example, _ := strings.Cut(rest, " — ")
+		if example == "" {
+			example = exampleFromSignature(signature, summary)
+		}
 		name := signature
 		if i := strings.Index(signature, "("); i >= 0 {
 			name = signature[:i]
 		}
-		docs[name] = append(docs[name], apiDoc{Signature: signature, Summary: summary})
+		docs[name] = append(docs[name], apiDoc{Signature: signature, Summary: summary, Example: example})
 	}
 	return docs
+}
+
+// ---------- usage examples ----------
+
+type docParam struct {
+	label, name, typ string
+	hasDefault       bool
+}
+
+func parseDocParam(text string) docParam {
+	head, typ, _ := strings.Cut(text, ":")
+	typ, _, hasDefault := strings.Cut(typ, " = ")
+	fields := strings.Fields(head)
+	if len(fields) == 0 {
+		return docParam{}
+	}
+	return docParam{label: fields[0], name: fields[len(fields)-1], typ: strings.TrimSpace(typ), hasDefault: hasDefault}
+}
+
+// Values that read naturally in an example, by parameter type.
+var sampleValues = map[string]string{
+	"Color": ".blue", "ShapeStyle": ".blue", "Bool": "true", "Font": ".title", "Font.Weight": ".bold", "Font.Design": ".rounded",
+	"Edge.Set": ".horizontal", "Alignment": ".leading", "HorizontalAlignment": ".leading", "VerticalAlignment": ".top",
+	"Angle": ".degrees(45)", "UnitPoint": ".center", "Shape": "RoundedRectangle(cornerRadius: 12)", "Image.Scale": ".large",
+	"TextAlignment": ".center", "ContentMode": ".fit", "ColorScheme": ".dark", "Visibility": ".hidden", "Axis.Set": ".horizontal",
+	"Animation": ".spring", "AnyTransition": ".slide", "URL": `URL(string: "https://apple.com")!`, "Hashable": "1", "Equatable": "count",
+	"EdgeInsets": "EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16)", "Set<PresentationDetent>": "[.medium, .large]",
+	"[Color]": "[.blue, .purple]", "[GridItem]": "[GridItem(.flexible()), GridItem(.flexible())]", "ClosedRange<Double>": "0...100",
+	"ClosedRange<Int>": "1...10", "Range<Int>": "0..<5", "[Identifiable]": "items", "VerticalEdge": ".bottom", "HorizontalEdge": ".leading",
+	"ToolbarItemPlacement": ".topBarTrailing", "ButtonRole?": ".destructive", "ButtonRole": ".destructive", "Text": `Text("Details")`,
+	"Gesture": "DragGesture()", "Glass": ".regular", "Observable": "model", "ObservableObject": "model", "View": `Text("Hello")`,
+	"RoundedCornerStyle": ".continuous", "TimelineSchedule": ".everyMinute", "KeyPath": `\.self`, "PersistentModel.Type": "Item.self",
+	"ModelContainer": "container", "Namespace.ID": "namespace", "Publisher": "timer", "UIImage": "uiImage", "FormatStyle": ".number",
+	"ToolbarPlacement": ".navigationBar", "ScrollDismissesKeyboardMode": ".interactively", "ScrollIndicatorVisibility": ".hidden",
+}
+
+// Numbers and strings read better when they suit the parameter.
+var sampleByName = map[string]string{
+	"radius": "8", "cornerRadius": "12", "width": "200", "height": "100", "opacity": "0.5", "x": "10", "y": "10", "length": "16",
+	"spacing": "12", "size": "20", "count": "3", "factor": "0.5", "kerning": "2", "number": "2", "scale": "1.5", "minLength": "20",
+	"value": "0.5", "total": "100", "step": "1", "startRadius": "0", "endRadius": "100", "minimumDuration": "1", "priority": ".high",
+	"title": `"Settings"`, "prompt": `"Name"`, "systemImage": `"star.fill"`, "systemName": `"star.fill"`, "content": `"Hello, world!"`,
+	"text": `"Tip"`, "label": `"Close"`, "header": `"Details"`, "item": `"Check this out"`, "name": `"Photo"`,
+	"red": "0.2", "green": "0.5", "blue": "0.9", "startPoint": ".top", "endPoint": ".bottom",
+}
+
+var memberInSummary = regexp.MustCompile(`\.[a-z]\w*(?:\([^()]*\))?`)
+
+// Writes a call such as ".accentColor(.blue)" or "Toggle("Settings", isOn: $isOn)".
+// The required parameters are filled in; when everything has a default the
+// first parameter is shown so the example still says what can be passed.
+func exampleFromSignature(signature, summary string) string {
+	open := strings.Index(signature, "(")
+	end := strings.LastIndex(signature, ")")
+	if open < 0 || end < open {
+		return ""
+	}
+	name := signature[:open]
+	if name != "" && name[0] >= 'a' && name[0] <= 'z' {
+		name = "." + name
+	}
+	var all, chosen []docParam
+	for _, text := range splitTopLevel(signature[open+1 : end]) {
+		if p := parseDocParam(text); p.label != "" {
+			all = append(all, p)
+			if !p.hasDefault {
+				chosen = append(chosen, p)
+			}
+		}
+	}
+	if len(chosen) == 0 && len(all) > 0 && all[0].typ != "Bool" && sampleArgument(all[0], true, summary) != "" {
+		chosen = all[:1]
+	}
+	var args []string
+	trailing := ""
+	for i, p := range chosen {
+		value := sampleArgument(p, i == 0, summary)
+		if value == "" {
+			value = p.name
+		}
+		if i == len(chosen)-1 && strings.HasPrefix(value, "{") {
+			trailing = " " + value
+			break
+		}
+		if p.label != "_" {
+			value = p.label + ": " + value
+		}
+		args = append(args, value)
+	}
+	if len(args) == 0 && trailing != "" {
+		return name + trailing
+	}
+	return name + "(" + strings.Join(args, ", ") + ")" + trailing
+}
+
+func sampleArgument(p docParam, first bool, summary string) string {
+	typ := strings.TrimSuffix(strings.TrimSuffix(p.typ, "..."), "?")
+	if strings.HasPrefix(typ, "(") && strings.HasSuffix(typ, ")") && strings.Contains(typ, "->") {
+		typ = typ[1 : len(typ)-1]
+	}
+	if strings.Contains(typ, "->") {
+		return sampleClosure(p.name, typ)
+	}
+	if strings.HasSuffix(typ, ".Binding") {
+		return "$isFocused"
+	}
+	if strings.HasPrefix(typ, "Binding<") {
+		return "$" + p.name
+	}
+	if strings.HasSuffix(typ, ".Type") && typ != "PersistentModel.Type" {
+		return "Item.self"
+	}
+	if value, ok := sampleByName[p.name]; ok && sampleSuitsType(value, typ) {
+		return value
+	}
+	if value, ok := map[string]string{"CGFloat": "16", "Double": "0.5", "Int": "3", "String": `"Hello"`}[typ]; ok {
+		return value
+	}
+	if value, ok := sampleValues[typ]; ok {
+		return value
+	}
+	if first {
+		return memberInSummary.FindString(summary)
+	}
+	return ""
+}
+
+// A quoted sample is only for a String and a number only for a numeric type.
+func sampleSuitsType(value, typ string) bool {
+	isNumberType := typ == "CGFloat" || typ == "Double" || typ == "Int"
+	switch {
+	case strings.HasPrefix(value, `"`):
+		return typ == "String"
+	case value[0] >= '0' && value[0] <= '9':
+		return isNumberType
+	default:
+		return typ != "String" && !isNumberType
+	}
+}
+
+// "() -> View" becomes "{ Text("Hello") }", "(Item) -> View" becomes
+// "{ item in Text("\(item)") }" and "() -> Void" becomes "{ print("Done") }".
+func sampleClosure(paramName, typ string) string {
+	arguments, result, _ := strings.Cut(typ, "->")
+	arguments = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(arguments), "async"))
+	result = strings.TrimSpace(result)
+	var names []string
+	for _, argument := range splitTopLevel(strings.Trim(arguments, "()")) {
+		names = append(names, closureArgumentName(argument))
+	}
+	head := "{ "
+	if len(names) > 0 {
+		head += strings.Join(names, ", ") + " in "
+	}
+	var body string
+	switch {
+	case result == "Void" && strings.Contains(typ, "async"):
+		body = "await loadData()"
+	case result == "Void":
+		body = `print("Done")`
+	case result == "ToolbarContent":
+		body = `ToolbarItem(placement: .topBarTrailing) { Button("Add") { } }`
+	case paramName == "label":
+		body = `Label("Photos", systemImage: "photo")`
+	case paramName == "mask":
+		body = "Circle()"
+	case paramName == "actions" || paramName == "menuItems":
+		body = `Button("OK") { }`
+	case len(names) > 0:
+		body = `Text("\(` + names[0] + `)")`
+	default:
+		body = `Text("Hello")`
+	}
+	return head + body + " }"
+}
+
+func closureArgumentName(typ string) string {
+	switch typ {
+	case "Element", "Item", "Data":
+		return "item"
+	case "GeometryProxy", "ScrollViewProxy":
+		return "proxy"
+	case "IndexSet":
+		return "offsets"
+	case "Int":
+		return "index"
+	}
+	if typ == "" {
+		return "value"
+	}
+	return strings.ToLower(typ[:1]) + typ[1:]
+}
+
+// ---------- parameter types ----------
+
+// What a parameter type is and the values people usually pass, shown next to
+// completions so a signature like accentColor(_ accentColor: Color?) says
+// what a Color can be.
+var typeDocs = map[string]string{
+	"Color":                "A colour: .red, .blue, .primary, .secondary, .accentColor, Color(\"AssetName\") or Color(red: 0.2, green: 0.5, blue: 0.9)",
+	"ShapeStyle":           "Anything that can paint: a Color (.red), .secondary, a material (.ultraThinMaterial) or a gradient (LinearGradient(colors: [.blue, .purple], startPoint: .top, endPoint: .bottom))",
+	"CGFloat":              "A number of points, for example 16 or 0.5",
+	"Font":                 ".largeTitle, .title, .headline, .body, .callout, .caption, or .system(size: 20, weight: .bold)",
+	"Font.Weight":          ".ultraLight, .light, .regular, .medium, .semibold, .bold, .heavy, .black",
+	"Font.Design":          ".default, .rounded, .serif, .monospaced",
+	"Edge.Set":             "Which sides: .all, .horizontal, .vertical, .top, .bottom, .leading, .trailing, or several like [.top, .leading]",
+	"Alignment":            ".center, .leading, .trailing, .top, .bottom, .topLeading, .topTrailing, .bottomLeading, .bottomTrailing",
+	"HorizontalAlignment":  ".leading, .center, .trailing",
+	"VerticalAlignment":    ".top, .center, .bottom, .firstTextBaseline",
+	"Angle":                ".degrees(45) or .radians(.pi)",
+	"UnitPoint":            "A point in the view: .center, .top, .bottom, .leading, .trailing, .topLeading…, or UnitPoint(x: 0.5, y: 0)",
+	"Shape":                "Circle(), Capsule(), Rectangle(), Ellipse(), RoundedRectangle(cornerRadius: 12) or .rect(cornerRadius: 12)",
+	"Binding":              "A two-way link to a value: write $name for a @State var name (or a @Binding or @Bindable property)",
+	"View":                 "Any view, such as Text(\"Hi\"), Image(systemName: \"star\") or a VStack { … }",
+	"Visibility":           ".automatic, .visible, .hidden",
+	"ColorScheme":          ".light or .dark",
+	"Image.Scale":          ".small, .medium, .large",
+	"TextAlignment":        ".leading, .center, .trailing",
+	"ContentMode":          ".fit or .fill",
+	"Animation":            ".default, .easeInOut, .spring, .bouncy, .linear(duration: 0.3), .easeIn(duration: 1)",
+	"AnyTransition":        ".opacity, .slide, .scale, .move(edge: .bottom), .push(from: .trailing)",
+	"URL":                  "A web or file address: URL(string: \"https://apple.com\")!",
+	"Date":                 "A moment in time: Date() or .now, Date.now.addingTimeInterval(3600)",
+	"ClosedRange":          "A range written with three dots, for example 0...10",
+	"Range":                "A range without its end, for example 0..<5",
+	"Hashable":             "A value that identifies something: an Int, a String, a UUID or an enum case",
+	"Equatable":            "A value that can be compared, usually a @State property",
+	"EdgeInsets":           "EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16)",
+	"PresentationDetent":   ".medium, .large, .height(300), .fraction(0.4)",
+	"ToolbarItemPlacement": ".topBarLeading, .topBarTrailing, .principal, .bottomBar, .confirmationAction, .cancellationAction",
+	"HorizontalEdge":       ".leading or .trailing",
+	"VerticalEdge":         ".top or .bottom",
+	"Axis.Set":             ".horizontal, .vertical or [.horizontal, .vertical]",
+	"Gesture":              "TapGesture(), LongPressGesture(), DragGesture() or MagnifyGesture(), with .onChanged { } and .onEnded { }",
+	"ButtonRole":           ".destructive (red) or .cancel",
+	"GridItem":             "A grid column: GridItem(.flexible()), GridItem(.fixed(80)) or GridItem(.adaptive(minimum: 100))",
+	"Text":                 "A Text view, for example Text(\"Details\")",
+	"FocusState":           "Write $isFocused for a @FocusState private var isFocused: Bool",
+	"KeyPath":              "A property path such as \\.self or \\.id",
+	"TaskPriority":         ".high, .medium, .low, .userInitiated, .utility, .background",
+	"ListStyle":            ".plain, .inset, .grouped, .insetGrouped, .sidebar",
+	"ButtonStyle":          ".bordered, .borderedProminent, .borderless, .plain",
+	"Namespace.ID":         "Declare @Namespace private var namespace and pass namespace",
+	"RoundedCornerStyle":   ".continuous (smooth, like iOS icons) or .circular",
+	"GeometryProxy":        "proxy.size.width, proxy.size.height and proxy.frame(in: .global)",
 }

@@ -333,6 +333,9 @@ type TypeDecl struct {
 	Members  []Stmt
 	Attrs    []*Attr
 	Mods     map[string]bool
+	Generics []string
+	Target   *TypeRef            // the extended type, for extensions
+	SameType map[string]*TypeRef // where Element == X, Self == X
 }
 
 type TypeAliasDecl struct {

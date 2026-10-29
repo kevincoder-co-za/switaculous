@@ -176,6 +176,13 @@ li.CodeMirror-hint-active { background: var(--chrome-accent); color: #fff; }
 
 #consolepane { flex: 0 0 170px; display: flex; flex-direction: column; border-top: 1px solid var(--chrome-line); background: var(--chrome-panel); }
 #consolepane.hidden { display: none; }
+#consolepane.minimized, #main.dock-top #consolepane.minimized, #main.dock-bottom #consolepane.minimized { flex-basis: auto; }
+#consolepane.minimized #console { display: none; }
+#consolepane.minimized #consolehead { border-bottom: none; }
+#consolepane.minimized #clearbtn { display: none; }
+#consolehead { cursor: pointer; user-select: none; }
+#consolecount { font-weight: 500; letter-spacing: 0; }
+#consolecount.has-error { color: var(--error-text); }
 
 #stage { flex: 0 0 auto; width: 470px; min-width: 320px; padding-top: 26px; box-sizing: border-box; }
 #stage #status {
@@ -196,6 +203,27 @@ li.CodeMirror-hint-active { background: var(--chrome-accent); color: #fff; }
   border: 1px solid var(--chrome-line); background: var(--chrome-bg); color: var(--chrome-text); outline: none;
 }
 .modal-card input:focus { border-color: var(--chrome-accent); }
+.welcome-card { gap: 14px; max-height: 90vh; overflow: auto; }
+.welcome-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.welcome-head .modal-hint { margin-top: 4px; }
+#welcomerecent.hidden, #welcomedemos.hidden, #welcomeclose.hidden { display: none; }
+.welcome-list { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; max-height: 240px; overflow: auto; }
+.welcome-list button {
+  font: inherit; text-align: left; display: flex; flex-direction: column; gap: 1px; padding: 7px 10px; border-radius: 7px;
+  border: none; background: none; color: var(--chrome-text); cursor: pointer;
+}
+.welcome-list button:hover, .welcome-list button:focus-visible { background: var(--explorer-selected); outline: none; }
+.welcome-list .welcome-path { color: var(--chrome-sub); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.welcome-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.welcome-action {
+  font: inherit; text-align: left; display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border-radius: 9px;
+  border: 1px solid var(--chrome-line); background: var(--chrome-bg); color: var(--chrome-text); cursor: pointer;
+}
+.welcome-action span { color: var(--chrome-sub); font-size: 11px; }
+.welcome-action.primary { background: var(--chrome-accent); border-color: transparent; color: #fff; }
+.welcome-action.primary span { color: rgba(255, 255, 255, .85); }
+.welcome-action:hover { border-color: var(--chrome-accent); }
+@media (max-width: 600px) { .welcome-actions { grid-template-columns: 1fr; } }
 .modal-buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 .modal-buttons button { font: inherit; padding: 6px 14px; border-radius: 7px; border: 1px solid var(--chrome-line); background: var(--chrome-bg); color: var(--chrome-text); cursor: pointer; }
 .modal-buttons button.primary { background: var(--chrome-accent); border-color: transparent; color: #fff; }
@@ -258,6 +286,13 @@ li.CodeMirror-hint-active .hint-detail { color: rgba(255, 255, 255, .8); }
 #doctip.show { display: block; }
 .doctip-sig { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; white-space: pre-wrap; color: var(--chrome-text); }
 .doctip-doc { color: var(--chrome-sub); margin-top: 4px; }
+.doctip-label { color: var(--chrome-sub); font-size: 10px; font-weight: 650; letter-spacing: .05em; text-transform: uppercase; margin-top: 8px; }
+.doctip-example {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; white-space: pre-wrap; color: var(--chrome-text);
+  background: var(--explorer-selected); border-radius: 5px; padding: 4px 6px; margin-top: 3px;
+}
+.doctip-type { color: var(--chrome-sub); margin-top: 6px; line-height: 1.4; }
+.doctip-type-name { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; color: var(--chrome-text); font-weight: 600; margin-right: 6px; }
 
 .connect-card { width: 540px; max-width: 95vw; }
 .connect-columns { display: flex; gap: 20px; }
@@ -272,3 +307,18 @@ li.CodeMirror-hint-active .hint-detail { color: rgba(255, 255, 255, .8); }
 @media (max-width: 820px) { .connect-columns { flex-direction: column; } }
 body.quit #quitmessage { display: flex; }
 body.quit #disconnected { display: none !important; }
+
+/* Right-click menu in the editor */
+.context-menu { position: fixed; top: 0; left: 0; min-width: 250px; }
+.context-menu .menu-item { all: unset; display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--chrome-text); white-space: nowrap; }
+.context-menu .menu-item:hover { background: var(--chrome-accent); color: #fff; }
+.context-menu .menu-item.disabled { opacity: .45; pointer-events: none; }
+.context-menu .menu-shortcut { font-size: 11px; opacity: .6; }
+.context-menu .menu-item:hover .menu-shortcut { opacity: .85; }
+
+/* Find bar */
+#editor .CodeMirror-dialog { display: flex; align-items: center; gap: 10px; padding: 6px 12px; font-size: 12px; background: var(--chrome-panel); color: var(--chrome-text); }
+#editor .CodeMirror-dialog-top { border-bottom: 1px solid var(--chrome-line); }
+#editor .CodeMirror-dialog input { width: 18em !important; padding: 3px 8px; border: 1px solid var(--chrome-line); border-radius: 6px; background: var(--chrome-bg); color: var(--chrome-text); font: 13px ui-monospace, "Cascadia Mono", Consolas, monospace; }
+#editor .CodeMirror-dialog input:focus { border-color: var(--chrome-accent); }
+#editor .CodeMirror-search-hint { color: var(--chrome-sub) !important; }

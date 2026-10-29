@@ -197,7 +197,7 @@ body {
 .placeholder { display: flex; align-items: center; justify-content: center; background: repeating-linear-gradient(45deg, var(--c-systemGray6), var(--c-systemGray6) 10px, var(--c-systemGray5) 10px, var(--c-systemGray5) 20px); color: var(--c-secondary); font-size: 13px; border-radius: 10px; min-height: 120px; }
 
 /* scroll */
-.scroll { overflow: auto; scrollbar-width: none; overscroll-behavior: contain; }
+.scroll { overflow: auto; scrollbar-width: none; }
 .scroll::-webkit-scrollbar { display: none; }
 .scrollin { display: flex; min-width: 100%; }
 .scrollin.v { flex-direction: column; align-items: center; min-height: min-content; }

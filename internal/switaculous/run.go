@@ -58,6 +58,10 @@ func Run(appVersion string, web, demos fs.FS) {
 	if flag.NArg() > 0 {
 		dir = flag.Arg(0)
 	}
+	if dir == "" && *check {
+		fmt.Fprintln(os.Stderr, "Give the project folder to use, for example: switaculous -check path/to/MyProject")
+		os.Exit(1)
+	}
 	if *check {
 		checkProject(dir, *dump)
 		return
@@ -67,16 +71,18 @@ func Run(appVersion string, web, demos fs.FS) {
 	if !portWasChosen && showRunningInstance(flag.Arg(0), *noOpen) {
 		return
 	}
-	serveProject(dir, *port, *noOpen, *localOnly, nil)
+	// Started without a folder, the editor opens on the welcome screen.
+	serveProject(dir, *port, *noOpen, *localOnly, flag.NArg() == 0, nil)
 }
 
-// Without a folder on the command line Switaculous reopens the last project,
-// or creates Documents/Switaculous/MyApp the first time.
+// Without a folder on the command line Switaculous reopens the last project
+// behind the welcome screen. The first time there is none, so it starts with
+// no project and the welcome screen offers a new one or a demo.
 func defaultProjectFolder() string {
 	if recent := existingRecentProjects(); len(recent) > 0 {
 		return recent[0]
 	}
-	return filepath.Join(switaculousDocumentsFolder(), "MyApp")
+	return ""
 }
 
 func switaculousDocumentsFolder() string {
@@ -110,6 +116,9 @@ func showRunningInstance(projectDir string, noOpen bool) bool {
 }
 
 func prepareProjectFolder(dir string) string {
+	if dir == "" {
+		return ""
+	}
 	if absDir, err := filepath.Abs(dir); err == nil {
 		dir = absDir
 	}
@@ -148,10 +157,13 @@ func checkProject(dir string, dump bool) {
 
 // Runs the preview server until the process ends. When ready is given, the
 // server's local URL is sent on it once it is listening (used by the MCP mode).
-func serveProject(dir string, port int, noOpen, localOnly bool, ready chan<- string) {
+func serveProject(dir string, port int, noOpen, localOnly, welcome bool, ready chan<- string) {
 	dir = prepareProjectFolder(dir)
 	rt := NewRuntime(dir)
-	saveRecentProject(dir)
+	rt.welcome = welcome
+	if dir != "" {
+		saveRecentProject(dir)
+	}
 	go warmUpSQLite()
 	go rt.Watch()
 
@@ -366,13 +378,27 @@ func openBrowser(url string) {
 	cmd.Start()
 }
 
+// The template every new project starts from, a hello-world app like Xcode's.
+// It lives with the demos but is not listed as one.
+const skeletonTemplate = "Skeleton"
+
+// Fills a folder without Swift code with the Skeleton template, its App
+// renamed after the folder.
 func ensureStarter(dir string) bool {
 	if containsSwiftFiles(dir) {
 		return false
 	}
+	if err := copyDemo(skeletonTemplate, dir); err != nil {
+		fmt.Fprintln(consoleOutput, "couldn't create the starter project:", err)
+		return false
+	}
 	appTypeName := starterAppTypeName(dir)
-	os.WriteFile(filepath.Join(dir, appTypeName+".swift"), []byte(fmt.Sprintf(starterApp, appTypeName)), 0644)
-	os.WriteFile(filepath.Join(dir, "ContentView.swift"), []byte(starterContent), 0644)
+	templateFile := filepath.Join(dir, skeletonTemplate+"App.swift")
+	if content, err := os.ReadFile(templateFile); err == nil {
+		os.Remove(templateFile)
+		content = []byte(strings.Replace(string(content), "struct "+skeletonTemplate+"App:", "struct "+appTypeName+":", 1))
+		os.WriteFile(filepath.Join(dir, appTypeName+".swift"), content, 0644)
+	}
 	return true
 }
 
@@ -388,54 +414,3 @@ func starterAppTypeName(dir string) string {
 	}
 	return name
 }
-
-const starterApp = `import SwiftUI
-
-@main
-struct %s: App {
-    var body: some Scene {
-        WindowGroup {
-            ContentView()
-        }
-    }
-}
-`
-
-const starterContent = `import SwiftUI
-
-struct ContentView: View {
-    @State private var count = 0
-    @State private var name = ""
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 20) {
-                Image(systemName: "hand.wave")
-                    .font(.system(size: 60))
-                    .foregroundStyle(.orange)
-
-                Text("Hello, \(name.isEmpty ? "SwiftUI" : name)!")
-                    .font(.title)
-                    .bold()
-
-                TextField("Your name", text: $name)
-                    .textFieldStyle(.roundedBorder)
-
-                Text("Tapped \(count) times")
-                    .foregroundStyle(.secondary)
-
-                Button("Tap me") {
-                    count += 1
-                }
-                .buttonStyle(.borderedProminent)
-            }
-            .padding()
-            .navigationTitle("Welcome")
-        }
-    }
-}
-
-#Preview {
-    ContentView()
-}
-`

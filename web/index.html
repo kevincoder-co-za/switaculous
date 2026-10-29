@@ -20,6 +20,8 @@
       <div id="mainmenu" class="app-menu" role="menu">
         <button class="menu-item" data-command="open-folder">Open Folder…</button>
         <button class="menu-item" data-command="new-project">New Project…</button>
+        <button class="menu-item" data-command="save-as">Save Project As…</button>
+        <button class="menu-item" data-command="welcome">Welcome Screen…</button>
         <div class="menu-separator"></div>
         <div class="menu-item has-submenu">Demos<div id="demosmenu" class="app-menu submenu"></div></div>
         <div class="menu-item has-submenu">Recent Projects<div id="recentmenu" class="app-menu submenu"></div></div>
@@ -93,7 +95,10 @@
     </div>
     <div id="editor"></div>
     <div id="consolepane">
-      <div class="pane-header">Console <button id="clearbtn" class="text-button">Clear</button></div>
+      <div class="pane-header" id="consolehead" title="Click to minimize or restore the console">
+        <span>Console <span id="consolecount"></span></span>
+        <span class="header-buttons"><button id="clearbtn" class="text-button">Clear</button><button id="consoleminbtn" class="text-button" title="Minimize console" aria-label="Minimize console">▾</button></span>
+      </div>
       <div id="console"></div>
     </div>
   </div>
@@ -117,9 +122,33 @@
 <div id="projectdialog" class="modal">
   <div class="modal-card wide">
     <div class="modal-title">Open a project folder</div>
-    <div class="modal-hint">This computer has no folder picker Switaculous can use, so type or paste a folder path. A new folder gets a starter app.</div>
-    <input id="projectinput" spellcheck="false" placeholder="C:\Users\you\Documents\MyApp">
+    <div class="modal-hint">This computer has no folder picker Switaculous can use, so type or paste a folder path. A new folder gets a Hello World app.</div>
+    <input id="projectinput" spellcheck="false" placeholder="C:\Users\you\Documents\HelloWorld">
     <div class="modal-buttons"><button id="projectcancel">Cancel</button><button id="projectopen" class="primary">Open</button></div>
+  </div>
+</div>
+<div id="welcomedialog" class="modal">
+  <div class="modal-card wide welcome-card">
+    <div class="welcome-head">
+      <div>
+        <div class="modal-title">Welcome to Switaculous</div>
+        <div id="welcomehint" class="modal-hint"></div>
+      </div>
+      <button id="welcomeclose" class="icon-button" title="Close" aria-label="Close">✕</button>
+    </div>
+    <div id="welcomerecent">
+      <div class="modal-subtitle">Your projects</div>
+      <div id="welcomerecentlist" class="welcome-list"></div>
+    </div>
+    <div class="welcome-actions">
+      <button class="welcome-action primary" data-welcome="new-project"><b>New Project…</b><span>A Hello World app, saved where you choose</span></button>
+      <button class="welcome-action" data-welcome="demos"><b>Start from a Demo…</b><span>Copy an example app to a folder you choose</span></button>
+      <button class="welcome-action" data-welcome="open-folder"><b>Open Folder…</b><span>Swift code you already have</span></button>
+    </div>
+    <div id="welcomedemos" class="hidden">
+      <div class="modal-subtitle">Pick a demo</div>
+      <div id="welcomedemolist" class="welcome-list"></div>
+    </div>
   </div>
 </div>
 <div id="sharedialog" class="modal">
@@ -155,6 +184,16 @@
 </div>
 <div id="quitmessage" class="modal"><div class="modal-card"><div class="modal-title">Switaculous has stopped</div><div class="modal-hint">Your work is saved. You can close this tab, and start Switaculous again from the Start menu or your applications.</div></div></div>
 <div id="doctip"></div>
+<div id="editormenu" class="app-menu context-menu" role="menu">
+  <button class="menu-item" data-command="definition"><span class="menu-label">Go to Definition</span><span class="menu-shortcut">F12</span></button>
+  <button class="menu-item" data-command="find"><span class="menu-label">Find…</span><span class="menu-shortcut">Ctrl+F</span></button>
+  <div class="menu-separator"></div>
+  <button class="menu-item" data-command="cut"><span class="menu-label">Cut</span><span class="menu-shortcut">Ctrl+X</span></button>
+  <button class="menu-item" data-command="copy"><span class="menu-label">Copy</span><span class="menu-shortcut">Ctrl+C</span></button>
+  <button class="menu-item" data-command="paste"><span class="menu-label">Paste</span><span class="menu-shortcut">Ctrl+V</span></button>
+  <div class="menu-separator"></div>
+  <button class="menu-item" data-command="format"><span class="menu-label">Format Document</span><span class="menu-shortcut">Shift+Alt+F</span></button>
+</div>
 <div id="toast"></div>
 <script src="cm/codemirror.js"></script>
 <script src="cm/swift.js"></script>
@@ -166,6 +205,7 @@
 <script src="cm/dialog.js"></script>
 <script src="cm/search.js"></script>
 <script src="cm/comment.js"></script>
+<script src="format.js"></script>
 <script src="symbols.js"></script>
 <script src="media.js"></script>
 <script src="app.js"></script>
