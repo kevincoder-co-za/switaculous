@@ -12,6 +12,7 @@
   const st = {
     payload: null, first: true, device: null, deviceId: '', scale: 1, dark: false, menuDefs: {}, warnedSyms: new Set(),
     consoleOpen: localStorage.getItem('switaculous.console') !== '0',
+    consoleMinimized: localStorage.getItem('switaculous.console.minimized') === '1',
     geoCache: {}, connected: false, lastSeq: 0,
   };
 
@@ -56,9 +57,14 @@
     $('#erasebtn').addEventListener('click', () => {
       if (confirm('Erase all SwiftData data saved by this app? This deletes the .swiftdata folder in the project and resets @State.')) settings({ eraseData: true });
     });
-    $('#consolebtn').addEventListener('click', () => { st.consoleOpen = !st.consoleOpen; localStorage.setItem('switaculous.console', st.consoleOpen ? '1' : '0'); $('#consolepane').classList.toggle('hidden', !st.consoleOpen); });
-    $('#clearbtn').addEventListener('click', () => { st.clearedAt = (st.payload && st.payload.console || []).length; renderConsole(st.payload); });
-    $('#consolepane').classList.toggle('hidden', !st.consoleOpen);
+    $('#consolebtn').addEventListener('click', () => {
+      st.consoleOpen = !st.consoleOpen || st.consoleMinimized;
+      localStorage.setItem('switaculous.console', st.consoleOpen ? '1' : '0');
+      setConsoleMinimized(false);
+    });
+    $('#clearbtn').addEventListener('click', (e) => { e.stopPropagation(); st.clearedAt = (st.payload && st.payload.console || []).length; renderConsole(st.payload); });
+    $('#consolehead').addEventListener('click', () => setConsoleMinimized(!st.consoleMinimized));
+    setConsoleMinimized(st.consoleMinimized);
     window.addEventListener('resize', fit);
     window.fitPreviewToStage = fit;
     window.showConnectDialog = showConnectDialog;
@@ -117,6 +123,24 @@
       c.appendChild(d);
     }
     if (atBottom) c.scrollTop = c.scrollHeight;
+    const shown = lines.slice(start);
+    $('#consolecount').textContent = shown.length ? '(' + shown.length + ')' : '';
+    $('#consolecount').classList.toggle('has-error', shown.some((l) => l.k === 'error'));
+  }
+
+  // A minimized console keeps its header, with the line count, so it can be
+  // restored with one click.
+  function setConsoleMinimized(minimized) {
+    st.consoleMinimized = minimized;
+    localStorage.setItem('switaculous.console.minimized', minimized ? '1' : '0');
+    const pane = $('#consolepane');
+    pane.classList.toggle('hidden', !st.consoleOpen);
+    pane.classList.toggle('minimized', minimized);
+    const button = $('#consoleminbtn');
+    button.textContent = minimized ? '▴' : '▾';
+    button.title = minimized ? 'Restore console' : 'Minimize console';
+    button.setAttribute('aria-label', button.title);
+    window.dispatchEvent(new Event('resize'));
   }
 
   function renderErrors(p) {
@@ -2360,6 +2384,7 @@
       const t = e.target.closest('[data-ctx]');
       if (t) { e.preventDefault(); openMenuAt(t, st.menuDefs[t.dataset.ctx], true); }
     });
+    scr.addEventListener('wheel', (e) => wheelAsSwipe(scr, e), { passive: false });
     let lpTimer = null, drag = null;
     scr.addEventListener('pointerdown', (e) => {
       const lp = e.target.closest('[data-lp]');
@@ -2422,6 +2447,48 @@
     });
   }
   function closeSwipe(row) { const c = row.querySelector('.rowc'); if (c) { c.style.transition = ''; c.style.transform = ''; } row._open = false; setTimeout(() => row.classList.remove('open', 'swiping'), 260); }
+
+  // A mouse wheel only moves up and down, so when nothing under the pointer can
+  // scroll that way the wheel swipes a horizontal ScrollView or a page-style
+  // TabView instead, the way a finger would. Anything else is left to the browser.
+  function wheelAsSwipe(scr, e) {
+    if (e.shiftKey || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+    if (scrollableAncestor(scr, e.target, 'y', e.deltaY)) return;
+    const horizontal = scrollableAncestor(scr, e.target, 'x', e.deltaY);
+    if (!horizontal) return;
+    e.preventDefault();
+    if (horizontal.classList.contains('pager')) flipPageWithWheel(horizontal, e.deltaY);
+    else horizontal.scrollLeft += e.deltaY;
+  }
+
+  function scrollableAncestor(scr, start, axis, delta) {
+    for (let el = start; el && el !== scr; el = el.parentElement) {
+      if (!(el instanceof Element)) return null;
+      const style = getComputedStyle(el);
+      const overflow = axis === 'y' ? style.overflowY : style.overflowX;
+      if (overflow !== 'auto' && overflow !== 'scroll') continue;
+      const room = axis === 'y' ? el.scrollHeight - el.clientHeight : el.scrollWidth - el.clientWidth;
+      const position = axis === 'y' ? el.scrollTop : el.scrollLeft;
+      if (room > 1 && (delta > 0 ? position < room - 1 : position > 0)) return el;
+    }
+    return null;
+  }
+
+  const pagerWheel = { pager: null, distance: 0, flipped: false, settleTimer: null };
+  function flipPageWithWheel(pager, delta) {
+    if (pagerWheel.pager !== pager) Object.assign(pagerWheel, { pager, distance: 0, flipped: false });
+    // One wheel gesture turns one page; the gesture is over once the wheel has been still for a moment.
+    clearTimeout(pagerWheel.settleTimer);
+    pagerWheel.settleTimer = setTimeout(() => { pagerWheel.pager = null; }, 300);
+    if (pagerWheel.flipped) return;
+    pagerWheel.distance += delta;
+    if (Math.abs(pagerWheel.distance) < 40) return;
+    pagerWheel.flipped = true;
+    const width = Math.max(1, pager.clientWidth);
+    const current = Math.round(pager.scrollLeft / width);
+    const next = Math.max(0, Math.min(pager.children.length - 1, current + (pagerWheel.distance > 0 ? 1 : -1)));
+    pager.scrollTo({ left: next * width, behavior: 'smooth' });
+  }
 
   // ---------- menus ----------
   function menuRowsFor(def) {

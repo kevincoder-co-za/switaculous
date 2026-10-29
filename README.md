@@ -76,14 +76,17 @@ With Go installed you can also run it straight from the source, without installi
 
 ### Using Switaculous
 
-Switaculous opens in your browser. The first time it creates a starter app in
-`Documents/Switaculous/MyApp`; after that it opens the project you used last. Use the menu
-button (three lines, top left) to:
+Switaculous opens in your browser on a welcome screen. It lists the projects you have used
+before; the first time, it offers a new project or one of the demos. New projects start from
+the Hello World app in `examples/Skeleton`. Use the menu button (three lines, top left) to:
 
 - **Open Folder**: open any folder with Swift code, such as the folder next to an `.xcodeproj`.
-- **New Project**: pick a name and a place to save it, and get a starter app.
-- **Demos**: open one of the included example apps. They are copied to
-  `Documents/Switaculous/Demos` the first time, so you can change them freely.
+- **New Project**: pick a name and a place to save it, and get a Hello World app.
+- **Save Project As** (Ctrl+Shift+S): save a copy of the project somewhere else and switch to
+  the copy. The preview's saved SwiftData and UserDefaults stay with the original.
+- **Welcome Screen**: show the welcome screen again.
+- **Demos**: open one of the included example apps. You choose where to save your copy, so
+  you can change it freely.
 - **Recent Projects**: reopen one of the last ten projects.
 - **Connect MCP** and **Connect iPhone / iPad**: see below.
 - **Quit Switaculous**: stop the program. Your work is always saved.
@@ -92,7 +95,13 @@ The buttons in the middle of the top bar move the preview to the left, top, bott
 the editor, or pop it out into its own window for a second screen. Close that window and the
 preview goes back to where it was.
 
-You can also start it with a project folder, for example `switaculous C:\Projects\MyApp`.
+In the editor, Ctrl+S re-indents the file (4 spaces per level, like Xcode's Re-Indent) and
+saves it; Shift+Alt+F re-indents without saving. Ctrl+Z undoes the re-indent. Completions show
+a panel beside the list with an example and what each parameter type accepts. Click the
+console's title bar to minimize it.
+
+You can also start it with a project folder, for example `switaculous C:\Projects\Weather`;
+then it skips the welcome screen.
 Use `switaculous -help` to see all options.
 
 ## What is supported

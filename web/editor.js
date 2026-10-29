@@ -57,14 +57,23 @@
       matchBrackets: true,
       autoCloseBrackets: true,
       styleActiveLine: true,
+      phrases: { '(Use /re/ syntax for regexp search)': FIND_HINT },
       gutters: ['CodeMirror-linenumbers', 'error-gutter'],
       extraKeys: {
-        'Ctrl-S': () => saveCurrentFile(),
-        'Cmd-S': () => saveCurrentFile(),
+        'Ctrl-F': 'findPersistent',
+        'Cmd-F': 'findPersistent',
+        F3: 'findNext',
+        'Shift-F3': 'findPrev',
+        F12: () => goToDefinition(wordAt(editor.getCursor()), { quiet: false }),
+        'Ctrl-S': () => { formatCurrentFile(); saveCurrentFile(); },
+        'Cmd-S': () => { formatCurrentFile(); saveCurrentFile(); },
+        'Shift-Ctrl-S': () => menuCommands['save-as'](),
+        'Shift-Cmd-S': () => menuCommands['save-as'](),
+        'Shift-Alt-F': () => formatCurrentFile(),
         'Ctrl-/': 'toggleComment',
         'Cmd-/': 'toggleComment',
         'Ctrl-Space': () => showCompletions(true),
-        'Ctrl-Shift-Space': () => { const t = editor.getTokenAt(editor.getCursor()); const d = docsFor(t.string); if (d.length) showDocTip(d.map((x) => x.sig).join('\n'), d[0].doc); },
+        'Ctrl-Shift-Space': () => { const t = editor.getTokenAt(editor.getCursor()); const d = docsFor(t.string); if (d.length) showDocTip(d.map((x) => x.sig).join('\n'), d[0].doc, null, d[0].example); },
         Tab: (cm) => {
           if (cm.somethingSelected()) cm.indentSelection('add');
           else cm.replaceSelection('    ', 'end');
@@ -73,6 +82,12 @@
       },
     });
     editor.on('change', onEditorChange);
+    const openDialog = editor.openDialog;
+    editor.openDialog = function (template, callback, options) {
+      const close = openDialog.call(this, template, callback, options);
+      showFindMatchCount();
+      return close;
+    };
     editor.on('inputRead', (cm, change) => {
       const typed = change.text.join('');
       if (typed === '.' || typed === '"' || /^[A-Za-z$]$/.test(typed)) showCompletions(false);
@@ -103,6 +118,36 @@
       }
       saveCurrentFile();
     }, AUTOSAVE_DELAY_MS);
+  }
+
+  // Re-indents the open file with 4 spaces per brace level, the way Xcode's
+  // Re-Indent does, as one undo step. Only the whitespace at the ends of each
+  // line changes, so the caret stays where it was.
+  function formatCurrentFile() {
+    if (!openFiles.has(currentPath) || !currentPath.endsWith('.swift')) return;
+    const cursorLine = editor.getCursor().line;
+    const oldLines = editor.getValue().split('\n');
+    const newLines = window.SwiftFormat.reindent(oldLines, cursorLine);
+    editor.operation(() => {
+      newLines.forEach((line, index) => {
+        const old = oldLines[index];
+        if (line === old) return;
+        const oldText = old.trim();
+        const oldStart = old.length - old.trimStart().length;
+        const newStart = line.length - line.trimStart().length;
+        if (!oldText) {
+          editor.replaceRange('', { line: index, ch: 0 }, { line: index, ch: old.length }, '+format');
+          return;
+        }
+        const oldEnd = oldStart + oldText.length;
+        if (line.length - newStart === oldText.length && old.length !== oldEnd) {
+          editor.replaceRange('', { line: index, ch: oldEnd }, { line: index, ch: old.length }, '+format');
+        }
+        if (old.slice(0, oldStart) !== line.slice(0, newStart)) {
+          editor.replaceRange(line.slice(0, newStart), { line: index, ch: 0 }, { line: index, ch: oldStart }, '+format');
+        }
+      });
+    });
   }
 
   async function saveCurrentFile() {
@@ -207,13 +252,154 @@
 
   function jumpToError(error) {
     if (!error || !error.path) return;
+    jumpToLocation(error);
+  }
+
+  function jumpToLocation(location) {
     const goToLine = () => {
-      editor.setCursor({ line: error.line - 1, ch: Math.max(0, error.col - 1) });
+      editor.setCursor({ line: location.line - 1, ch: Math.max(0, location.col - 1) });
       editor.scrollIntoView(null, 120);
       editor.focus();
     };
-    if (error.path === currentPath) goToLine();
-    else openFile(error.path).then(goToLine);
+    if (location.path === currentPath) goToLine();
+    else openFile(location.path).then(goToLine);
+  }
+
+  // ---------- go to definition ----------
+
+  // The identifier around the cursor, found by scanning the line in both directions so
+  // the cursor can sit at the start, the middle or the end of the word.
+  function wordAt(position) {
+    const lineText = editor.getLine(position.line) || '';
+    let start = position.ch;
+    let end = position.ch;
+    while (start > 0 && /\w/.test(lineText[start - 1])) start--;
+    while (end < lineText.length && /\w/.test(lineText[end])) end++;
+    const word = lineText.slice(start, end);
+    return /^[A-Za-z_]\w*$/.test(word) ? word : '';
+  }
+
+  async function goToDefinition(name, options) {
+    if (!name) return;
+    let sites = [];
+    try {
+      const response = await fetch('/api/definition?name=' + encodeURIComponent(name));
+      sites = (await response.json()).sites || [];
+    } catch (error) {
+      showToast('Could not look up ' + name, true);
+      return;
+    }
+    // The declaration the cursor is already on is skipped, so jumping again from
+    // there moves on to the next place the name is declared (an extension, say).
+    const cursorLine = editor.getCursor().line + 1;
+    const elsewhere = sites.filter((site) => !(site.path === currentPath && site.line === cursorLine));
+    if (elsewhere.length) {
+      jumpToLocation(elsewhere[0]);
+      return;
+    }
+    if (options && options.quiet) return;
+    showToast(sites.length ? `${name} is declared right here` : `No declaration of ${name} in this project`);
+  }
+
+  function isWithinSelection(position) {
+    return CodeMirror.cmpPos(position, editor.getCursor('from')) >= 0 && CodeMirror.cmpPos(position, editor.getCursor('to')) <= 0;
+  }
+
+  function wireEditorContextMenu() {
+    const menu = byId('editormenu');
+    const wrapper = editor.getWrapperElement();
+    let wordUnderPointer = '';
+    const closeMenu = () => menu.classList.remove('show');
+    const setItemState = (command, label, enabled) => {
+      const item = menu.querySelector(`[data-command="${command}"]`);
+      if (label) item.querySelector('.menu-label').textContent = label;
+      item.classList.toggle('disabled', !enabled);
+    };
+
+    wrapper.addEventListener('dblclick', (event) => {
+      if (!event.target.closest('.CodeMirror-lines')) return;
+      const position = editor.coordsChar({ left: event.clientX, top: event.clientY }, 'window');
+      goToDefinition(wordAt(position), { quiet: true });
+    });
+
+    wrapper.addEventListener('contextmenu', (event) => {
+      if (event.target.closest('.CodeMirror-dialog')) return;
+      event.preventDefault();
+      const position = editor.coordsChar({ left: event.clientX, top: event.clientY }, 'window');
+      if (!(editor.somethingSelected() && isWithinSelection(position))) editor.setCursor(position);
+      wordUnderPointer = wordAt(position);
+      setItemState('definition', wordUnderPointer ? `Go to Definition of ${wordUnderPointer}` : 'Go to Definition', Boolean(wordUnderPointer));
+      setItemState('cut', null, editor.somethingSelected());
+      setItemState('copy', null, editor.somethingSelected());
+      menu.classList.add('show');
+      menu.style.left = Math.min(event.clientX, window.innerWidth - menu.offsetWidth - 8) + 'px';
+      menu.style.top = Math.min(event.clientY, window.innerHeight - menu.offsetHeight - 8) + 'px';
+    });
+
+    const commands = {
+      definition: () => goToDefinition(wordUnderPointer, { quiet: false }),
+      find: () => editor.execCommand('findPersistent'),
+      cut: async () => {
+        await navigator.clipboard.writeText(editor.getSelection());
+        editor.replaceSelection('');
+      },
+      copy: () => navigator.clipboard.writeText(editor.getSelection()),
+      paste: async () => editor.replaceSelection(await navigator.clipboard.readText()),
+      format: () => formatCurrentFile(),
+    };
+    menu.addEventListener('click', async (event) => {
+      const item = event.target.closest('[data-command]');
+      if (!item) return;
+      closeMenu();
+      editor.focus();
+      try {
+        await commands[item.dataset.command]();
+      } catch (error) {
+        showToast('The browser did not allow clipboard access', true);
+      }
+    });
+    document.addEventListener('pointerdown', (event) => {
+      if (!event.target.closest('#editormenu')) closeMenu();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closeMenu();
+    });
+  }
+
+  // ---------- find ----------
+
+  const FIND_HINT = 'Enter: next · Shift+Enter: previous · Esc: close';
+
+  // Shows "3 of 12" in the find bar, kept current as the query is typed and as Enter moves between matches.
+  function showFindMatchCount() {
+    const wrapper = editor.getWrapperElement();
+    const field = wrapper.querySelector('.CodeMirror-dialog .CodeMirror-search-field');
+    const hint = wrapper.querySelector('.CodeMirror-dialog .CodeMirror-search-hint');
+    if (!field || !hint) return;
+    const update = () => { hint.textContent = describeFindMatches(field.value); };
+    field.addEventListener('input', update);
+    field.addEventListener('keyup', update);
+    update();
+  }
+
+  function describeFindMatches(queryText) {
+    if (!queryText) return FIND_HINT;
+    let query = queryText;
+    const regexSyntax = queryText.match(/^\/(.*)\/([a-z]*)$/);
+    if (regexSyntax) {
+      try { query = new RegExp(regexSyntax[1], regexSyntax[2].includes('i') ? 'i' : ''); } catch (error) { query = queryText; }
+    }
+    const caseFold = typeof query === 'string' && query === query.toLowerCase();
+    const selectionStart = editor.getCursor('from');
+    const cursor = editor.getSearchCursor(query, { line: 0, ch: 0 }, { caseFold, multiline: true });
+    let total = 0;
+    let current = 0;
+    while (cursor.findNext()) {
+      total++;
+      if (CodeMirror.cmpPos(cursor.from(), selectionStart) === 0) current = total;
+    }
+    if (!total) return 'No matches · ' + FIND_HINT;
+    return `${current || '–'} of ${total} · ${FIND_HINT}`;
   }
 
   // ---------- autocomplete ----------
@@ -236,11 +422,14 @@
           let items = response.items || [];
           if (response.context === 'string') items = stringCompletions(lineText, start, response.prefix);
           if (!items.length) { resolve(null); return; }
-          resolve({
+          const result = {
             list: items.map((item) => completionEntry(item)),
             from: CodeMirror.Pos(cursor.line, start),
             to: cursor,
-          });
+          };
+          CodeMirror.on(result, 'select', (completion, node) => showCompletionInfo(completion.item, node));
+          CodeMirror.on(result, 'close', () => { if (byId('doctip').dataset.mode === 'completion') hideDocTip(); });
+          resolve(result);
         });
       }),
     });
@@ -315,19 +504,37 @@
     const text = insert.replace(CURSOR_MARKER, '');
     cm.replaceRange(text, data.from, data.to, 'complete');
     if (caretOffset >= 0) cm.setCursor(CodeMirror.Pos(data.from.line, data.from.ch + caretOffset));
-    if (item.kind === 'method' || item.kind === 'modifier' || item.kind === 'view') showDocTip(item.detail, item.doc);
+    if (item.kind === 'method' || item.kind === 'modifier' || item.kind === 'view') showDocTip(item.detail, item.doc, null, item.example);
+  }
+
+  // While the completion list is open, the highlighted entry is explained in a
+  // panel beside it: what it does, an example, and what its parameter types are.
+  function showCompletionInfo(item, node) {
+    if (!item || !node) return;
+    const signature = item.kind === 'field' && item.detail ? item.text + ': ' + item.detail : item.detail;
+    if (!fillDocTip(signature, item.doc, item.example)) { hideDocTip(); return; }
+    const tip = byId('doctip');
+    tip.dataset.mode = 'completion';
+    clearTimeout(docTipTimer);
+    const list = node.closest('.CodeMirror-hints').getBoundingClientRect();
+    const row = node.getBoundingClientRect();
+    tip.classList.add('show');
+    const width = tip.offsetWidth;
+    const left = list.right + 6 + width <= window.innerWidth ? list.right + 6 : Math.max(4, list.left - 6 - width);
+    tip.style.left = left + 'px';
+    tip.style.top = Math.max(4, Math.min(row.top, window.innerHeight - tip.offsetHeight - 4)) + 'px';
   }
 
   // ---------- hover help ----------
 
-  let apiDocs = { modifiers: {}, views: {} };
+  let apiDocs = { modifiers: {}, views: {}, types: {} };
   let docTipTimer = null;
 
   async function loadDocs() {
     try {
       apiDocs = await (await fetch('/api/docs')).json();
     } catch (error) {
-      apiDocs = { modifiers: {}, views: {} };
+      apiDocs = { modifiers: {}, views: {}, types: {} };
     }
   }
 
@@ -335,17 +542,42 @@
     return (apiDocs.views[word] || []).concat(apiDocs.modifiers[word] || []);
   }
 
-  function showDocTip(signature, summary, anchor) {
+  // The parameter types in a signature that have an explanation, so
+  // "accentColor(_ accentColor: Color?)" also says what a Color can be.
+  function typeNotesFor(signature) {
+    const types = apiDocs.types || {};
+    const open = signature.indexOf('(');
+    const params = open >= 0 ? signature.slice(open) : signature;
+    const names = params.match(/[A-Z]\w*(?:\.[A-Z]\w*)*/g) || [];
+    return [...new Set(names)].filter((name) => types[name]).slice(0, 4).map((name) => ({ name, doc: types[name] }));
+  }
+
+  function hideDocTip() {
+    byId('doctip').classList.remove('show');
+  }
+
+  function fillDocTip(signature, summary, example) {
     const tip = byId('doctip');
-    if (!signature && !summary) { tip.classList.remove('show'); return; }
+    if (!signature && !summary && !example) return false;
     tip.innerHTML = '';
-    const sig = document.createElement('div');
-    sig.className = 'doctip-sig';
-    sig.textContent = signature;
-    const doc = document.createElement('div');
-    doc.className = 'doctip-doc';
-    doc.textContent = summary;
-    tip.append(sig, doc);
+    if (signature) tip.appendChild(createElement('div', 'doctip-sig', signature));
+    if (summary) tip.appendChild(createElement('div', 'doctip-doc', summary));
+    if (example) {
+      tip.appendChild(createElement('div', 'doctip-label', 'Example'));
+      tip.appendChild(createElement('div', 'doctip-example', example));
+    }
+    for (const note of typeNotesFor(signature || '')) {
+      const row = createElement('div', 'doctip-type');
+      row.append(createElement('span', 'doctip-type-name', note.name), createElement('span', '', note.doc));
+      tip.appendChild(row);
+    }
+    return true;
+  }
+
+  function showDocTip(signature, summary, anchor, example) {
+    const tip = byId('doctip');
+    if (!fillDocTip(signature, summary, example)) { hideDocTip(); return; }
+    tip.dataset.mode = 'tip';
     const coords = anchor || editor.cursorCoords(true, 'page');
     tip.style.left = Math.min(coords.left, window.innerWidth - 440) + 'px';
     tip.style.top = (coords.bottom + 6) + 'px';
@@ -366,7 +598,7 @@
       const docs = docsFor(word);
       if (!docs.length) { byId('doctip').classList.remove('show'); return; }
       const coords = editor.charCoords({ line: position.line, ch: token.start }, 'page');
-      showDocTip(docs.map((d) => d.sig).join('\n'), docs[0].doc, coords);
+      showDocTip(docs.map((d) => d.sig).join('\n'), docs[0].doc, coords, docs[0].example);
     });
     wrapper.addEventListener('mouseleave', () => { lastWord = ''; byId('doctip').classList.remove('show'); });
   }
@@ -548,6 +780,7 @@
       await saveCurrentFile();
       await postJSON('/api/project', { dir });
       byId('projectdialog').classList.remove('show');
+      byId('welcomedialog').classList.remove('show');
     } catch (error) {
       showToast(error.message, true);
     }
@@ -566,6 +799,87 @@
     }
   }
 
+  // ---------- welcome ----------
+
+  // Shown when Switaculous starts: the projects used before, or a new project
+  // or a demo. New projects and demo copies both ask where to save them. It can
+  // only be closed once a project is open.
+  async function showWelcome() {
+    const [project, demos] = await Promise.all([
+      fetch('/api/project').then((response) => response.json()),
+      fetch('/api/demos').then((response) => response.json()),
+    ]);
+    const recent = project.recent || [];
+    byId('welcomehint').textContent = recent.length
+      ? 'Open one of your projects, or start a new one.'
+      : 'Start a new project, or learn from one of the demos.';
+    byId('welcomerecent').classList.toggle('hidden', !recent.length);
+    fillWelcomeList('welcomerecentlist', recent.map((dir) => ({
+      label: dir.split(/[\\/]/).pop() || dir,
+      detail: dir,
+      choose: () => chooseFromWelcome('/api/project', { dir }),
+    })));
+    fillWelcomeList('welcomedemolist', demos.map((name) => ({
+      label: name,
+      choose: () => chooseFromWelcome('/api/demos/open', { name }, `Choose where to save your copy of ${name} in the window that opens…`),
+    })));
+    byId('welcomedemos').classList.add('hidden');
+    byId('welcomeclose').classList.toggle('hidden', !project.dir);
+    byId('welcomedialog').classList.add('show');
+  }
+
+  function fillWelcomeList(id, items) {
+    const list = byId(id);
+    list.replaceChildren();
+    for (const item of items) {
+      const button = createElement('button', '');
+      button.appendChild(createElement('span', '', item.label));
+      if (item.detail) button.appendChild(createElement('span', 'welcome-path', item.detail));
+      button.title = item.detail || item.label;
+      button.addEventListener('click', item.choose);
+      list.appendChild(button);
+    }
+  }
+
+  // Leaves the welcome screen up when the folder dialog is cancelled.
+  async function chooseFromWelcome(url, body, message) {
+    if (message) showToast(message);
+    try {
+      await saveCurrentFile();
+      const result = await postJSON(url, body);
+      if (!result.cancelled) byId('welcomedialog').classList.remove('show');
+    } catch (error) {
+      if (error.status === 501) showProjectPathDialog();
+      else showToast(error.message, true);
+    }
+  }
+
+  function closeWelcome() {
+    if (!projectDir) return;
+    byId('welcomedialog').classList.remove('show');
+    fetch('/api/project/welcome-done', { method: 'POST' });
+  }
+
+  function wireWelcome() {
+    const actions = {
+      'new-project': () => chooseFromWelcome('/api/project/new', null, 'Name the project and choose where to save it in the window that opens…'),
+      'open-folder': () => chooseFromWelcome('/api/project/open-folder', null, 'Choose a folder in the window that opens…'),
+      demos: () => byId('welcomedemos').classList.toggle('hidden'),
+    };
+    byId('welcomedialog').addEventListener('click', (event) => {
+      const action = event.target.closest('[data-welcome]');
+      if (action) actions[action.dataset.welcome]();
+      else if (event.target === byId('welcomedialog')) closeWelcome();
+    });
+    byId('welcomeclose').addEventListener('click', closeWelcome);
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && byId('welcomedialog').classList.contains('show')) closeWelcome();
+    });
+    fetch('/api/project').then((response) => response.json()).then((project) => {
+      if (project.welcome || !project.dir) showWelcome();
+    });
+  }
+
   // ---------- menu ----------
 
   const menuCommands = {
@@ -577,6 +891,17 @@
       showToast('Name the project and choose where to save it in the window that opens…');
       runProjectRequest('/api/project/new');
     },
+    'save-as': async () => {
+      showToast('Name the copy and choose where to save it in the window that opens…');
+      try {
+        await saveCurrentFile();
+        const result = await postJSON('/api/project/save-as');
+        if (!result.cancelled) showToast('Saved a copy to ' + result.dir + ' and opened it');
+      } catch (error) {
+        showToast(error.message, true);
+      }
+    },
+    welcome: () => showWelcome(),
     'connect-mcp': () => window.showConnectDialog('mcp'),
     'connect-phone': () => window.showConnectDialog('phone'),
     quit: async () => {
@@ -601,7 +926,10 @@
     ]);
     fillSubmenu('demosmenu', demos.map((name) => ({
       label: name,
-      open: () => runProjectRequest('/api/demos/open', { name }),
+      open: () => {
+        showToast(`Choose where to save your copy of ${name} in the window that opens…`);
+        runProjectRequest('/api/demos/open', { name });
+      },
     })), 'No demos');
     fillSubmenu('recentmenu', (project.recent || []).map((dir) => ({
       label: dir.split(/[\\/]/).pop() || dir,
@@ -707,6 +1035,7 @@
   function init() {
     createEditor();
     wireHoverHelp();
+    wireEditorContextMenu();
     loadDocs();
     makePaneResizable('split-explorer', 'explorer', 'switaculous.explorerWidth', 140);
 
@@ -720,6 +1049,7 @@
       else openFile(row.dataset.path);
     });
     wireMainMenu();
+    wireWelcome();
     byId('projectopen').addEventListener('click', () => openProject(byId('projectinput').value));
     byId('projectcancel').addEventListener('click', () => byId('projectdialog').classList.remove('show'));
     byId('projectinput').addEventListener('keydown', (event) => {

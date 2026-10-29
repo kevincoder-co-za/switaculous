@@ -45,6 +45,9 @@ func (rt *Runtime) projectFilePath(relPath string) (string, error) {
 	if relPath == "" {
 		return "", errors.New("missing file path")
 	}
+	if rt.dir == "" {
+		return "", errors.New("no project is open")
+	}
 	cleaned := filepath.Clean(filepath.FromSlash(relPath))
 	// The editor must never be able to read or overwrite files outside the project folder.
 	if filepath.IsAbs(cleaned) || strings.HasPrefix(cleaned, "..") {
@@ -103,6 +106,7 @@ func (rt *Runtime) registerFileAPI(mux *http.ServeMux) {
 	mux.HandleFunc("/api/open-in-vscode", rt.handleOpenInVSCode)
 	mux.HandleFunc("/api/complete", rt.handleComplete)
 	mux.HandleFunc("/api/docs", rt.handleDocs)
+	mux.HandleFunc("/api/definition", rt.handleDefinition)
 }
 
 func (rt *Runtime) handleFile(w http.ResponseWriter, r *http.Request) {

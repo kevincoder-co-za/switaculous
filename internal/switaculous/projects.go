@@ -24,6 +24,8 @@ func (rt *Runtime) registerProjectAPI(mux *http.ServeMux) {
 	mux.HandleFunc("/api/project", rt.handleProject)
 	mux.HandleFunc("/api/project/open-folder", rt.handleOpenFolder)
 	mux.HandleFunc("/api/project/new", rt.handleNewProject)
+	mux.HandleFunc("/api/project/save-as", rt.handleSaveProjectAs)
+	mux.HandleFunc("/api/project/welcome-done", rt.handleWelcomeDone)
 	mux.HandleFunc("/api/demos", handleListDemos)
 	mux.HandleFunc("/api/demos/open", rt.handleOpenDemo)
 	mux.HandleFunc("/api/quit", handleQuit)
@@ -53,9 +55,9 @@ func (rt *Runtime) followFileLocked(absPath string) {
 func (rt *Runtime) handleProject(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		rt.mu.Lock()
-		currentDir := rt.dir
+		currentDir, welcome := rt.dir, rt.welcome
 		rt.mu.Unlock()
-		writeJSON(w, map[string]interface{}{"dir": currentDir, "recent": existingRecentProjects()})
+		writeJSON(w, map[string]interface{}{"dir": currentDir, "recent": existingRecentProjects(), "welcome": welcome})
 		return
 	}
 	var request struct {
@@ -76,6 +78,15 @@ func (rt *Runtime) handleProject(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]string{"dir": projectDir})
 }
 
+// The welcome screen shows once per start; reloading the page doesn't bring
+// it back after the user has closed it.
+func (rt *Runtime) handleWelcomeDone(w http.ResponseWriter, r *http.Request) {
+	rt.mu.Lock()
+	rt.welcome = false
+	rt.mu.Unlock()
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (rt *Runtime) handleOpenFolder(w http.ResponseWriter, r *http.Request) {
 	projectDir, err := showNativeFolderDialog(false, "Open a folder with Swift code", "")
 	if err != nil {
@@ -94,7 +105,7 @@ func (rt *Runtime) handleOpenFolder(w http.ResponseWriter, r *http.Request) {
 // Like Xcode's "Save As" step for a new project: the user names the project
 // and picks where it goes, and that becomes the project folder.
 func (rt *Runtime) handleNewProject(w http.ResponseWriter, r *http.Request) {
-	projectDir, err := showNativeFolderDialog(true, "Name your new project and choose where to save it", "MyApp")
+	projectDir, err := showNativeFolderDialog(true, "Name your new project and choose where to save it", "HelloWorld")
 	if err != nil {
 		writeJSONError(w, http.StatusNotImplemented, err.Error())
 		return
@@ -116,6 +127,63 @@ func (rt *Runtime) handleNewProject(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]string{"dir": projectDir})
 }
 
+// Copies the open project to a folder the user names and switches to the copy,
+// leaving the original as it was. Hidden and build folders are not copied, so
+// the copy starts without the preview's saved SwiftData and UserDefaults.
+func (rt *Runtime) handleSaveProjectAs(w http.ResponseWriter, r *http.Request) {
+	rt.mu.Lock()
+	projectDir := rt.dir
+	rt.mu.Unlock()
+	if projectDir == "" {
+		writeJSONError(w, http.StatusConflict, "open a project first")
+		return
+	}
+	targetDir, err := showNativeFolderDialog(true, "Save a copy of this project as", filepath.Base(projectDir)+" copy")
+	if err != nil {
+		writeJSONError(w, http.StatusNotImplemented, err.Error())
+		return
+	}
+	if targetDir == "" {
+		writeJSON(w, map[string]bool{"cancelled": true})
+		return
+	}
+	if inside, _ := filepath.Rel(projectDir, targetDir); inside == "." || (!strings.HasPrefix(inside, "..") && !filepath.IsAbs(inside)) {
+		writeJSONError(w, http.StatusConflict, "pick a folder outside the project you are saving")
+		return
+	}
+	if containsSwiftFiles(targetDir) {
+		writeJSONError(w, http.StatusConflict, filepath.Base(targetDir)+" already has Swift files in it. Pick another name.")
+		return
+	}
+	if err := copyProject(projectDir, targetDir); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "couldn't save the copy: "+err.Error())
+		return
+	}
+	rt.openProject(targetDir)
+	writeJSON(w, map[string]string{"dir": targetDir})
+}
+
+func copyProject(sourceDir, targetDir string) error {
+	return filepath.Walk(sourceDir, func(sourcePath string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() && sourcePath != sourceDir && skipDir(info.Name()) {
+			return filepath.SkipDir
+		}
+		relPath, _ := filepath.Rel(sourceDir, sourcePath)
+		targetPath := filepath.Join(targetDir, relPath)
+		if info.IsDir() {
+			return os.MkdirAll(targetPath, 0755)
+		}
+		content, err := os.ReadFile(sourcePath)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(targetPath, content, info.Mode().Perm())
+	})
+}
+
 func (rt *Runtime) openProject(projectDir string) {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
@@ -123,6 +191,7 @@ func (rt *Runtime) openProject(projectDir string) {
 	rt.userDefaultsLoaded = false
 	rt.userDefaultsSaved = ""
 	rt.dir = projectDir
+	rt.welcome = false
 	rt.files = map[string]string{}
 	rt.lastEdited = ""
 	rt.pinned = "auto"
@@ -201,7 +270,7 @@ func demoNames() []string {
 	entries, _ := fs.ReadDir(demoFiles, "examples")
 	names := []string{}
 	for _, entry := range entries {
-		if entry.IsDir() {
+		if entry.IsDir() && entry.Name() != skeletonTemplate {
 			names = append(names, entry.Name())
 		}
 	}
@@ -212,9 +281,10 @@ func handleListDemos(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, demoNames())
 }
 
-// The demos ship inside the program, so they are copied to
-// Documents/Switaculous/Demos the first time they are opened. After that the copy is
-// theirs to change: opening the demo again keeps their edits.
+// The demos ship inside the program, so opening one saves a copy of it where
+// the user chooses, and that copy is theirs to change. Without a folder dialog
+// the copy goes to Documents/Switaculous/Demos, and opening the demo again
+// there keeps their edits.
 func (rt *Runtime) handleOpenDemo(w http.ResponseWriter, r *http.Request) {
 	var request struct {
 		Name string `json:"name"`
@@ -230,7 +300,21 @@ func (rt *Runtime) handleOpenDemo(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusNotFound, "there is no demo called "+request.Name)
 		return
 	}
-	demoDir := filepath.Join(switaculousDocumentsFolder(), "Demos", request.Name)
+	demoDir, err := showNativeFolderDialog(true, "Choose where to save your copy of "+request.Name, request.Name)
+	if errors.Is(err, errNoNativeDialog) {
+		demoDir, err = filepath.Join(switaculousDocumentsFolder(), "Demos", request.Name), nil
+	} else if err == nil && demoDir != "" && containsSwiftFiles(demoDir) {
+		writeJSONError(w, http.StatusConflict, filepath.Base(demoDir)+" already has Swift files in it. Pick another name.")
+		return
+	}
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if demoDir == "" {
+		writeJSON(w, map[string]bool{"cancelled": true})
+		return
+	}
 	if !containsSwiftFiles(demoDir) {
 		if err := copyDemo(request.Name, demoDir); err != nil {
 			writeJSONError(w, http.StatusInternalServerError, "couldn't copy the demo: "+err.Error())
